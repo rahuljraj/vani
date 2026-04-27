@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dart pub *)",
+      "Bash(flutter --version)",
+      "Read(//c/flutter/flutter/packages/flutter_tools/templates/app_android_module/android/**)",
+      "Read(//c/flutter/flutter/packages/flutter_tools/templates/app/android.tmpl/**)",
+      "Read(//c/flutter/flutter/packages/flutter_tools/templates/**)",
+      "Read(//c/flutter/flutter/packages/flutter_tools/gradle/**)",
+      "Bash(powershell -Command \"Remove-Item -Force 'C:\\\\Users\\\\rahul\\\\vani\\\\vani\\\\vani\\\\android\\\\app\\\\src\\\\main\\\\java\\\\io\\\\flutter\\\\plugins\\\\GeneratedPluginRegistrant.java'\")",
+      "Bash(echo \"exit:$?\")",
+      "Bash(flutter devices *)",
+      "Bash(flutter run *)",
+      "Read(//c/flutter/flutter/packages/flutter_tools/lib/src/**)",
+      "Bash(cp C:/flutter/flutter/packages/flutter_tools/templates/app/android.tmpl/app/src/main/res/mipmap-__TRACKED_VAR__/ic_launcher.png c:/Users/rahul/vani/vani/vani/android/app/src/main/res/mipmap-__TRACKED_VAR__/ic_launcher.png)",
+      "Bash(cp C:/flutter/flutter/packages/flutter_tools/templates/app/android.tmpl/app/src/main/res/drawable/launch_background.xml c:/Users/rahul/vani/vani/vani/android/app/src/main/res/drawable/launch_background.xml)",
+      "Bash(cp C:/flutter/flutter/packages/flutter_tools/templates/app/android.tmpl/app/src/main/res/drawable-v21/launch_background.xml c:/Users/rahul/vani/vani/vani/android/app/src/main/res/drawable-v21/launch_background.xml)",
+      "Bash(cp C:/flutter/flutter/packages/flutter_tools/templates/app/android.tmpl/app/src/main/res/values/styles.xml c:/Users/rahul/vani/vani/vani/android/app/src/main/res/values/styles.xml)",
+      "Bash(cp C:/flutter/flutter/packages/flutter_tools/templates/app/android.tmpl/app/src/main/res/values-night/styles.xml c:/Users/rahul/vani/vani/vani/android/app/src/main/res/values-night/styles.xml)",
+      "Bash(powershell -Command 'Select-String -Pattern '\\\\''speech_to_text'\\\\'' -Path '\\\\''C:\\\\Users\\\\rahul\\\\vani\\\\vani\\\\vani\\\\pubspec.lock'\\\\'' -Context 0,6 | Select-Object -First 1 | ForEach-Object { $_.Context.PostContext }')",
+      "Bash(flutter analyze *)",
+      "Bash(flutter clean *)"
+    ]
+  }
+}
