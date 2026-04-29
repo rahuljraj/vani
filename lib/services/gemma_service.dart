@@ -26,43 +26,40 @@ class GemmaService {
   bool get isLoading => _isLoading;
 
   static const String _systemPrompt = '''
-You are VANI — Voice AI Native Interface.
-You are built for India. You understand Hindi, English, and Hinglish naturally.
-You help users control their Android phone apps using voice.
+You are VANI, an Android Voice AI. 
+Reply ONLY with a valid JSON object. No conversational text before or after the JSON.
 
-When a user speaks, reply ONLY in this JSON format:
-
+JSON SCHEMA:
 {
   "intent": "navigate|order_food|search_product|read_messages|send_message|find_nearby|play_media|chat",
   "app": "google_maps|blinkit|swiggy|zomato|whatsapp|youtube|amazon|none",
   "parameters": {
-    "destination": "",
-    "item": "",
-    "quantity": "",
-    "contact": "",
-    "message": "",
-    "query": "",
-    "place_type": ""
+    "destination": "string",
+    "item": "string",
+    "quantity": "string",
+    "contact": "string",
+    "message": "string",
+    "query": "string",
+    "place_type": "string"
   },
-  "speak": "Short Hindi/Hinglish reply max 10 words",
+  "speak": "Hindi/Hinglish response, max 10 words",
   "action": "action_code"
 }
 
+RULES:
+1. "intent": Must match schema. Default to "chat".
+2. "app": Must match schema. Default to "none".
+3. "parameters": Fill relevant fields only. Empty string for others.
+4. "speak": Use natural Hinglish (e.g., "Blinkit pe milk mangao").
+5. "action": Internal code (e.g., "maps_navigate", "whatsapp_send", "none").
+6. Output MUST start with { and end with }. No markdown blocks.
+
 EXAMPLES:
-
-User: "Blinkit pe atta dhundho"
-{"intent":"order_food","app":"blinkit","parameters":{"item":"atta"},"speak":"Blinkit pe atta dhundh raha hoon","action":"blinkit_search"}
-
-User: "Navigate to airport"
+User: "Airport jaana hai"
 {"intent":"navigate","app":"google_maps","parameters":{"destination":"airport"},"speak":"Airport ka rasta dikha raha hoon","action":"maps_navigate"}
 
-User: "Hello VANI"
-{"intent":"chat","app":"none","parameters":{},"speak":"Namaste! Kya karein?","action":"none"}
-
-RULES:
-- Reply in JSON only
-- speak in Hindi/Hinglish, max 10 words
-- If unclear, use intent "chat"
+User: "Blinkit pe 2kg sugar"
+{"intent":"order_food","app":"blinkit","parameters":{"item":"sugar","quantity":"2kg"},"speak":"Blinkit pe sugar add kar raha hoon","action":"blinkit_search"}
 ''';
 
   static const String _sdCardModelPath =
@@ -166,22 +163,31 @@ RULES:
       }
 
       _log.i('Setting model path: ${file.path}');
-      await FlutterGemma.installModel(modelType: ModelType.gemmaIt)
-          .fromFile(file.path)
-          .install();
+      // Explicitly await the installation process
+      final installer = FlutterGemma.installModel(modelType: ModelType.gemmaIt)
+          .fromFile(file.path);
+      await installer.install();
 
       _log.i('Creating model...');
-      _model = await FlutterGemma.getActiveModel(
+      final activeModel = await FlutterGemma.getActiveModel(
         maxTokens: InferenceConfig.maxContextTokens,
       );
 
+      if (activeModel == null) {
+        _log.e('Failed to get active model: getActiveModel returned null');
+        _isLoading = false;
+        return false;
+      }
+
       _log.i('Creating chat...');
-      _chat = await _model!.createChat(
+      final activeChat = await activeModel.createChat(
         temperature: InferenceConfig.temperature,
         randomSeed: 42,
         topK: InferenceConfig.topK,
       );
 
+      _model = activeModel;
+      _chat = activeChat;
       _isReady = true;
       _isLoading = false;
       _log.i('✅ Gemma ready!');
@@ -206,7 +212,8 @@ RULES:
       return fast;
     }
 
-    if (!_isReady || _chat == null) {
+    final chat = _chat;
+    if (!_isReady || chat == null) {
       _log.w('Model not ready');
       return VaniIntent(
         type: IntentType.chat,
@@ -222,11 +229,11 @@ RULES:
 
       final prompt = '$_systemPrompt\n\nUser: $userText\nAssistant:';
 
-      await _chat!.addQueryChunk(
+      await chat.addQueryChunk(
         Message.text(text: prompt, isUser: true),
       );
 
-      final response = await _chat!.generateChatResponse();
+      final response = await chat.generateChatResponse();
       _log.d('Response: $response');
 
       String text = '';
@@ -243,7 +250,8 @@ RULES:
   }
 
   Stream<String> streamResponse(String userText) async* {
-    if (!_isReady || _chat == null) {
+    final chat = _chat;
+    if (!_isReady || chat == null) {
       yield 'AI ready nahi hai abhi.';
       return;
     }
@@ -251,11 +259,11 @@ RULES:
     try {
       final prompt = '$_systemPrompt\n\nUser: $userText\nAssistant:';
 
-      await _chat!.addQueryChunk(
+      await chat.addQueryChunk(
         Message.text(text: prompt, isUser: true),
       );
 
-      await for (final response in _chat!.generateChatResponseAsync()) {
+      await for (final response in chat.generateChatResponseAsync()) {
         if (response is TextResponse) {
           yield response.token;
         }
