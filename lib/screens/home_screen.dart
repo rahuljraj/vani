@@ -5,6 +5,7 @@ import '../core/constants.dart';
 import '../services/audio_service.dart';
 import '../services/tts_service.dart';
 import '../services/gemma_service.dart';
+import '../services/permission_service.dart';
 import '../services/actions/action_router.dart';
 
 enum VaniState { idle, listening, thinking, speaking, error }
@@ -19,7 +20,8 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen>
     with TickerProviderStateMixin {
 
-  final _router = ActionRouter();
+  final _router   = ActionRouter();
+  final _textCtrl = TextEditingController();
 
   VaniState _state            = VaniState.idle;
   String    _transcript       = '';
@@ -88,9 +90,29 @@ class _HomeScreenState extends State<HomeScreen>
       }
     }
 
-    if (mounted) setState(() => _loadingStep = 'Model load ho raha hai... please wait');
+    // MANAGE_EXTERNAL_STORAGE is required on Android 11+ to copy the model
+    // file from /sdcard/Download/ to internal storage on first launch.
+    if (!await PermissionService.instance.hasAllFilesAccess) {
+      if (mounted) setState(() => _loadingStep = 'Storage access chahiye — "Allow" karein');
+      final granted = await PermissionService.instance.requestAllFilesAccess();
+      if (!granted) {
+        if (mounted) setState(() { _modelError = true; _loadingStep = ''; });
+        return;
+      }
+    }
 
-    final ok = await GemmaService.instance.initialize();
+    if (mounted) setState(() {
+      _loadingStep = 'Model load ho raha hai... (pehli baar thoda time lagega)';
+      _isDownloading = true;
+      _downloadProgress = 0.0;
+    });
+
+    final ok = await GemmaService.instance.initialize(
+      onProgress: (p) {
+        if (mounted) setState(() => _downloadProgress = p);
+      },
+    );
+    if (mounted) setState(() => _isDownloading = false);
     if (mounted) {
       setState(() {
         _modelReady  = ok;
@@ -119,7 +141,7 @@ class _HomeScreenState extends State<HomeScreen>
       },
     );
 
-    if (ok) setState(() {
+    if (ok && mounted) setState(() {
       _state      = VaniState.listening;
       _transcript = '';
       _response   = '';
@@ -132,7 +154,7 @@ class _HomeScreenState extends State<HomeScreen>
     final text = await AudioService.instance.stopSttListening();
 
     if (text.trim().isEmpty) {
-      setState(() => _state = VaniState.idle);
+      if (mounted) setState(() => _state = VaniState.idle);
       return;
     }
 
@@ -141,12 +163,13 @@ class _HomeScreenState extends State<HomeScreen>
 
   Future<void> _cancelListening() async {
     await AudioService.instance.stopSttListening();
-    setState(() => _state = VaniState.idle);
+    if (mounted) setState(() => _state = VaniState.idle);
   }
 
   // ── Process Text (called from text input) ───────
   Future<void> processText(String text) async {
     if (text.trim().isEmpty) return;
+    _textCtrl.clear();
 
     setState(() {
       _state      = VaniState.thinking;
@@ -197,6 +220,7 @@ class _HomeScreenState extends State<HomeScreen>
   void dispose() {
     _pulseCtrl.dispose();
     _glowCtrl.dispose();
+    _textCtrl.dispose();
     super.dispose();
   }
 
@@ -228,7 +252,7 @@ class _HomeScreenState extends State<HomeScreen>
             if (_isDownloading) ...[
               const SizedBox(height: 4),
               const Text(
-                'Sirf pehli baar — 555 MB',
+                'Sirf pehli baar — 2.4 GB',
                 style: TextStyle(color: VaniColors.textHint, fontSize: 11),
               ),
               const SizedBox(height: 10),
@@ -436,6 +460,7 @@ class _HomeScreenState extends State<HomeScreen>
         children: [
           Expanded(
             child: TextField(
+              controller: _textCtrl,
               style: const TextStyle(color: VaniColors.primary, fontSize: 14),
               decoration: InputDecoration(
                 hintText:      'Ya yahan type karein...',

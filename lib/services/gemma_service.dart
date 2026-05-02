@@ -1,5 +1,6 @@
 // lib/services/gemma_service.dart
 
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter_gemma/flutter_gemma.dart';
 import 'package:logger/logger.dart';
@@ -17,8 +18,7 @@ class GemmaService {
   final _log = Logger();
   
   InferenceModel? _model;
-  InferenceChat? _chat;
-  
+
   bool _isReady = false;
   bool _isLoading = false;
 
@@ -62,8 +62,10 @@ User: "Blinkit pe 2kg sugar"
 {"intent":"order_food","app":"blinkit","parameters":{"item":"sugar","quantity":"2kg"},"speak":"Blinkit pe sugar add kar raha hoon","action":"blinkit_search"}
 ''';
 
-  static const String _sdCardModelPath =
-      '/sdcard/Download/gemma_model.task';
+  // Primary SD card path — matches the download URL filename
+  static const String _sdCardModelPath = '/sdcard/Download/gemma_model.task.litertlm';
+  // Fallback: alternate name without double extension
+  static const String _sdCardModelPathAlt = '/sdcard/Download/gemma_model.task';
 
   Future<File> _modelFile() async {
     final docsDir = await getApplicationDocumentsDirectory();
@@ -71,17 +73,19 @@ User: "Blinkit pe 2kg sugar"
   }
 
   Future<File?> _availableModelFile() async {
-    final sdCard = File(_sdCardModelPath);
-    if (sdCard.existsSync() && sdCard.lengthSync() > 1024 * 1024) {
-      _log.i('Model on SD card: ${sdCard.lengthSync() ~/ (1024 * 1024)} MB');
-      return sdCard;
+    for (final path in [_sdCardModelPath, _sdCardModelPathAlt]) {
+      final f = File(path);
+      if (f.existsSync() && f.lengthSync() > 1024 * 1024) {
+        _log.i('Model on SD card ($path): ${f.lengthSync() ~/ (1024 * 1024)} MB');
+        return f;
+      }
     }
     final docsFile = await _modelFile();
     if (docsFile.existsSync() && docsFile.lengthSync() > 1024 * 1024) {
       _log.i('Model in docs: ${docsFile.path}');
       return docsFile;
     }
-    _log.w('No model file found');
+    _log.w('No model file found — checked SD card and ${(await _modelFile()).path}');
     return null;
   }
 
@@ -144,7 +148,24 @@ User: "Blinkit pe 2kg sugar"
     }
   }
 
-  // ── Initialize — CORRECT flutter_gemma 0.5.x API ──
+  // ── Copy with progress (SD card → internal storage) ──
+  Future<void> _copyWithProgress(
+    File src,
+    File dst,
+    void Function(double)? onProgress,
+  ) async {
+    final totalBytes = src.lengthSync();
+    var copied = 0;
+    final sink = dst.openWrite();
+    await for (final chunk in src.openRead()) {
+      sink.add(chunk);
+      copied += chunk.length;
+      onProgress?.call((copied / totalBytes).clamp(0.0, 1.0));
+    }
+    await sink.close();
+  }
+
+  // ── Initialize — flutter_gemma 0.14.x API ──
   Future<bool> initialize({
     void Function(double)? onProgress,
   }) async {
@@ -155,39 +176,41 @@ User: "Blinkit pe 2kg sugar"
     _log.i('Initializing Gemma...');
 
     try {
-      final file = await _availableModelFile();
+      var file = await _availableModelFile();
       if (file == null) {
         _log.e('No model file found');
         _isLoading = false;
         return false;
       }
 
-      _log.i('Setting model path: ${file.path}');
-      // Explicitly await the installation process
-      final installer = FlutterGemma.installModel(modelType: ModelType.gemmaIt)
-          .fromFile(file.path);
-      await installer.install();
-
-      _log.i('Creating model...');
-      final activeModel = await FlutterGemma.getActiveModel(
-        maxTokens: InferenceConfig.maxContextTokens,
-      );
-
-      if (activeModel == null) {
-        _log.e('Failed to get active model: getActiveModel returned null');
-        _isLoading = false;
-        return false;
+      // LiteRT-LM native open() is blocked from /sdcard/ by Android scoped storage.
+      // Copy to internal storage on first run; reuse the cache on subsequent runs.
+      if (file.path.startsWith('/sdcard/') ||
+          file.path.startsWith('/storage/emulated/')) {
+        final internalFile = await _modelFile();
+        if (!internalFile.existsSync() ||
+            internalFile.lengthSync() < file.lengthSync()) {
+          _log.i(
+            'Copying ${file.lengthSync() ~/ (1024 * 1024)} MB to internal storage...',
+          );
+          await _copyWithProgress(file, internalFile, onProgress);
+          _log.i('Model copied: ${internalFile.path}');
+        } else {
+          _log.i('Internal model cache found: ${internalFile.path}');
+        }
+        file = internalFile;
       }
 
-      _log.i('Creating chat...');
-      final activeChat = await activeModel.createChat(
-        temperature: InferenceConfig.temperature,
-        randomSeed: 42,
-        topK: InferenceConfig.topK,
-      );
+      _log.i('Setting model path: ${file.path}');
+      await FlutterGemma.installModel(
+        modelType: ModelType.gemmaIt,
+        fileType: ModelFileType.litertlm,
+      ).fromFile(file.path).install();
 
-      _model = activeModel;
-      _chat = activeChat;
+      _log.i('Creating model...');
+      _model = await FlutterGemma.getActiveModel(
+        maxTokens: InferenceConfig.maxContextTokens,
+      );
       _isReady = true;
       _isLoading = false;
       _log.i('✅ Gemma ready!');
@@ -212,8 +235,8 @@ User: "Blinkit pe 2kg sugar"
       return fast;
     }
 
-    final chat = _chat;
-    if (!_isReady || chat == null) {
+    final model = _model;
+    if (!_isReady || model == null) {
       _log.w('Model not ready');
       return VaniIntent(
         type: IntentType.chat,
@@ -227,22 +250,44 @@ User: "Blinkit pe 2kg sugar"
     try {
       _log.d('Gemma: $userText');
 
-      final prompt = '$_systemPrompt\n\nUser: $userText\nAssistant:';
-
-      await chat.addQueryChunk(
-        Message.text(text: prompt, isUser: true),
+      // Fresh chat per query — prevents KV cache accumulation across commands
+      final chat = await model.createChat(
+        temperature: InferenceConfig.temperature,
+        randomSeed: 42,
+        topK: InferenceConfig.topK,
       );
 
-      final response = await chat.generateChatResponse();
+      await chat.addQueryChunk(
+        Message.text(
+          text: '$_systemPrompt\n\nUser: $userText\nAssistant:',
+          isUser: true,
+        ),
+      );
+
+      final response = await chat.generateChatResponse().timeout(
+        Duration(seconds: InferenceConfig.responseTimeoutSeconds),
+      );
       _log.d('Response: $response');
 
-      String text = '';
+      final String text;
       if (response is TextResponse) {
         text = response.token;
+      } else {
+        // ModelResponse fallback — covers future subtypes
+        text = response.toString();
       }
 
       return VaniIntent.fromRaw(text);
 
+    } on TimeoutException {
+      _log.w('Gemma timed out after ${InferenceConfig.responseTimeoutSeconds}s');
+      return VaniIntent(
+        type: IntentType.chat,
+        app: AppTarget.none,
+        parameters: {},
+        speakText: 'Thoda time lag raha hai. Dobara bolein?',
+        actionCode: 'none',
+      );
     } catch (e, stack) {
       _log.e('Processing error: $e\n$stack');
       return VaniIntent.error();
@@ -250,22 +295,31 @@ User: "Blinkit pe 2kg sugar"
   }
 
   Stream<String> streamResponse(String userText) async* {
-    final chat = _chat;
-    if (!_isReady || chat == null) {
+    final model = _model;
+    if (!_isReady || model == null) {
       yield 'AI ready nahi hai abhi.';
       return;
     }
 
     try {
-      final prompt = '$_systemPrompt\n\nUser: $userText\nAssistant:';
+      final chat = await model.createChat(
+        temperature: InferenceConfig.temperature,
+        randomSeed: 42,
+        topK: InferenceConfig.topK,
+      );
 
       await chat.addQueryChunk(
-        Message.text(text: prompt, isUser: true),
+        Message.text(
+          text: '$_systemPrompt\n\nUser: $userText\nAssistant:',
+          isUser: true,
+        ),
       );
 
       await for (final response in chat.generateChatResponseAsync()) {
         if (response is TextResponse) {
           yield response.token;
+        } else {
+          yield response.toString();
         }
       }
     } catch (e, stack) {
@@ -275,7 +329,6 @@ User: "Blinkit pe 2kg sugar"
   }
 
   Future<void> dispose() async {
-    _chat = null;
     try {
       await _model?.close();
     } catch (_) {}

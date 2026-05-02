@@ -85,19 +85,17 @@ class VaniAccessibilityService : AccessibilityService() {
         val searchField = findSearchField(root)
 
         if (searchField != null) {
-            // Click search field
             searchField.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-            Thread.sleep(300)
-
-            // Set text
-            val args = Bundle()
-            args.putString(
-                AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE,
-                query
-            )
-            searchField.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
-
-            android.util.Log.d("VANI", "✅ Searched: $query")
+            // Delay setText so the field is focused before we write into it
+            android.os.Handler(mainLooper).postDelayed({
+                val args = Bundle()
+                args.putString(
+                    AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE,
+                    query
+                )
+                searchField.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+                android.util.Log.d("VANI", "✅ Searched: $query")
+            }, 300)
         } else {
             android.util.Log.w("VANI", "❌ Search field not found")
         }

@@ -1,0 +1,15 @@
+# Ignore heavy AI binaries
+*.task
+*.bin
+*.litertlm
+/sdcard/
+
+# Ignore Flutter/Android build artifacts
+build/
+.dart_tool/
+android/app/build/
+ios/
+
+# Ignore logs and secrets
+*.log
+lib/core/secrets.dart
