@@ -18,73 +18,76 @@ class AudioService {
   bool   _isRecording = false;
   bool   _sttReady    = false;
   String _lastWords   = '';
+  void Function()? _autoStopCallback;
 
   bool   get isRecording => _isRecording;
   String get lastWords   => _lastWords;
+  bool   get isListening => _stt.isListening;
 
-  // ── Speech-to-Text (Hindi) ─────────────────────
   Future<bool> _ensureSttReady() async {
     if (_sttReady) return true;
-
     _sttReady = await _stt.initialize(
       onError:  (error)  => _log.e('STT error: ${error.errorMsg}'),
-      onStatus: (status) => _log.d('STT status: $status'),
+      onStatus: (status) {
+        _log.d('STT status: $status');
+        // 'done' or 'notListening' fires when STT auto-stops on silence
+        if ((status == 'done' || status == 'notListening')
+            && _autoStopCallback != null) {
+          _autoStopCallback?.call();
+          _autoStopCallback = null;
+        }
+      },
     );
-
-    if (!_sttReady) _log.w('Speech recognition not available on this device');
+    if (!_sttReady) _log.w('Speech recognition not available');
     return _sttReady;
   }
 
-  /// Start live Hindi speech recognition.
-  /// [onResult] fires on every partial and final transcript update.
-  /// Returns false if speech recognition is not available on this device.
+  /// Start live Hindi STT.
+  /// [onResult] fires on every partial/final transcript.
+  /// [onAutoStop] fires when STT detects end-of-speech (after 2s silence).
   Future<bool> startSttListening({
     required void Function(String text) onResult,
+    void Function()? onAutoStop,
   }) async {
     if (!await _ensureSttReady()) return false;
-
-    // Stop any in-progress session before starting a new one.
     if (_stt.isListening) await _stt.stop();
 
-    _lastWords = '';
+    _lastWords        = '';
+    _autoStopCallback = onAutoStop;
 
     await _stt.listen(
       onResult: (result) {
         _lastWords = result.recognizedWords;
         onResult(_lastWords);
       },
-      localeId:     'hi_IN',
+      localeId:    'hi_IN',
+      listenFor:   const Duration(seconds: 30),  // hard cap
+      pauseFor:    const Duration(seconds: 2),   // EoS after 2s silence
       listenOptions: SpeechListenOptions(
         cancelOnError:  true,
         partialResults: true,
+        listenMode:     ListenMode.dictation,
       ),
     );
 
-    _log.d('STT listening (hi_IN)');
+    _log.d('STT listening (hi_IN, pauseFor=2s)');
     return true;
   }
 
-  /// Stop listening and return the final recognised text.
-  /// Returns an empty string if recognition was never started or nothing was heard.
   Future<String> stopSttListening() async {
+    _autoStopCallback = null;
     if (_stt.isListening) await _stt.stop();
     _log.d('STT stopped. Result: "$_lastWords"');
     return _lastWords;
   }
 
-  // ── Raw Audio Recording (kept for future audio passthrough) ────
+  // ── Raw recording (kept for future audio→Gemma) ──
   Future<bool> startRecording() async {
     try {
-      final hasPerm = await _recorder.hasPermission();
-      if (!hasPerm) {
-        _log.w('No microphone permission');
-        return false;
-      }
-
+      if (!await _recorder.hasPermission()) return false;
       final dir  = await getTemporaryDirectory();
       final path =
         '${dir.path}/vani_${DateTime.now().millisecondsSinceEpoch}.m4a';
-
       await _recorder.start(
         RecordConfig(
           encoder:     AudioEncoder.aacLc,
@@ -94,11 +97,8 @@ class AudioService {
         ),
         path: path,
       );
-
       _isRecording = true;
-      _log.d('Recording started');
       return true;
-
     } catch (e) {
       _log.e('Start recording error: $e');
       return false;
@@ -110,7 +110,6 @@ class AudioService {
       if (!_isRecording) return null;
       final path   = await _recorder.stop();
       _isRecording = false;
-      _log.d('Recording saved: $path');
       return path;
     } catch (e) {
       _log.e('Stop recording error: $e');
@@ -120,12 +119,8 @@ class AudioService {
   }
 
   Future<void> cancelRecording() async {
-    try {
-      await _recorder.cancel();
-      _isRecording = false;
-    } catch (e) {
-      _log.e('Cancel error: $e');
-    }
+    try { await _recorder.cancel(); _isRecording = false; }
+    catch (e) { _log.e('Cancel error: $e'); }
   }
 
   Future<void> dispose() async {

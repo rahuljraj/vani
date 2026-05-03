@@ -130,23 +130,31 @@ class _HomeScreenState extends State<HomeScreen>
 
   // ── Recording ───────────────────────────────────
   Future<void> _startListening() async {
-    if (_state == VaniState.thinking) return;
-    await TtsService.instance.stop();
-
-    final ok = await AudioService.instance.startSttListening(
-      onResult: (text) {
-        if (mounted && text.isNotEmpty) {
-          setState(() => _transcript = text);
-        }
-      },
-    );
-
-    if (ok && mounted) setState(() {
-      _state      = VaniState.listening;
-      _transcript = '';
-      _response   = '';
-    });
+  if (_state == VaniState.thinking) return;
+  if (!_modelReady) {
+    await TtsService.instance.speak('Ek second, AI load ho rahi hai');
+    return;
   }
+  await TtsService.instance.stop();
+
+  final ok = await AudioService.instance.startSttListening(
+    onResult: (text) {
+      if (mounted && text.isNotEmpty) {
+        setState(() => _transcript = text);
+      }
+    },
+    // Auto-fire stop+process when STT detects 2s silence
+    onAutoStop: () {
+      if (_state == VaniState.listening) _stopAndProcess();
+    },
+  );
+
+  if (ok && mounted) setState(() {
+    _state      = VaniState.listening;
+    _transcript = '';
+    _response   = '';
+  });
+}
 
   Future<void> _stopAndProcess() async {
     if (_state != VaniState.listening) return;
@@ -387,11 +395,12 @@ class _HomeScreenState extends State<HomeScreen>
   Widget _buildMicButton() {
     final isListening = _state == VaniState.listening;
     final isThinking  = _state == VaniState.thinking;
+    final disabled    = isThinking || !_modelReady;
 
     return GestureDetector(
-      onTapDown:   isThinking ? null : (_) => _startListening(),
-      onTapUp:     isThinking ? null : (_) => _stopAndProcess(),
-      onTapCancel: isThinking ? null : ()  => _cancelListening(),
+     onTapDown:   disabled ? null : (_) => _startListening(),
+     onTapUp:     disabled ? null : (_) => _stopAndProcess(),
+     onTapCancel: disabled ? null : ()  => _cancelListening(),
       child: AnimatedBuilder(
         animation: _pulseAnim,
         builder: (_, child) {

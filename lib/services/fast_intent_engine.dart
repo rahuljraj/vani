@@ -1,20 +1,14 @@
 // lib/services/fast_intent_engine.dart
-//
-// Pattern-matches common Hindi/Hinglish voice queries without invoking Gemma.
-// Pure string ops — no model load, no async — always returns in under 50 ms.
-// Returns null when the query is ambiguous; GemmaService falls back to Gemma.
 
 import '../models/vani_intent.dart';
 
 class FastIntentEngine {
-
-  /// Try to match [text] to a known intent.
-  /// Returns a [VaniIntent] on confident match, or null to let Gemma handle it.
   static VaniIntent? tryMatch(String text) {
     final t = text.toLowerCase().trim();
     if (t.isEmpty) return null;
 
-    return _navigate(t)
+    return _call(t)
+        ?? _navigate(t)
         ?? _nearby(t)
         ?? _blinkit(t)
         ?? _swiggy(t)
@@ -22,6 +16,34 @@ class FastIntentEngine {
         ?? _youtube(t)
         ?? _whatsapp(t)
         ?? _greeting(t);
+  }
+
+  // ── Call ────────────────────────────────────────────────────────────────────
+  static VaniIntent? _call(String t) {
+    final hasCallVerb = t.contains('call ') ||
+                        t.contains('phone karo') ||
+                        t.contains('phone kar') ||
+                        t.contains(' ko call') ||
+                        t.contains('dial ');
+    if (!hasCallVerb) return null;
+
+    var contact = t
+        .replaceAll(RegExp(r'\b(call|phone|dial)\s*(karo|kar)?\b'), '')
+        .replaceAll(RegExp(r'\bko\b'), '')
+        .replaceAll(RegExp(r'\b(abhi|please|jaldi)\b'), '')
+        .trim();
+
+    contact = _clean(contact) ?? '';
+
+    return _intent(
+      type:   IntentType.sendMessage, // reusing — no separate enum yet
+      app:    AppTarget.none,
+      params: {'contact': contact},
+      speak:  contact.isNotEmpty
+                ? '$contact ko call kar raha hoon'
+                : 'Dialer khol raha hoon',
+      action: 'phone_dial',
+    );
   }
 
   // ── Navigation ──────────────────────────────────────────────────────────────
@@ -34,7 +56,7 @@ class FastIntentEngine {
     else if (t.contains(' navigate'))      dest = t.split(' navigate').first.trim();
     else if (t.contains(' jaana hai'))     dest = t.split(' jaana hai').first.trim();
     else if (t.startsWith('le chal '))     dest = _after(t, 'le chal ');
-    else if (t.contains('direction to ')) dest = _after(t, 'direction to ');
+    else if (t.contains('direction to '))  dest = _after(t, 'direction to ');
 
     dest = _clean(dest);
     if (dest == null) return null;
@@ -75,23 +97,18 @@ class FastIntentEngine {
   // ── Blinkit ─────────────────────────────────────────────────────────────────
   static VaniIntent? _blinkit(String t) {
     if (!t.contains('blinkit')) return null;
-
-    var item = t
-        .replaceAll(RegExp(r'blinkit\s*(pe|par|se|mein|me)?'), '')
-        .replaceAll(RegExp(r'(order karo|mangao|lao|chahiye|search karo)'), '')
-        .trim();
+    final item = _extractFoodItem(t, 'blinkit');
+    if (item == null) return null;
 
     final qty = _extractQty(item);
-    if (qty != null) item = item.replaceFirst(qty, '').trim();
-
-    item = _clean(item) ?? '';
-    if (item.isEmpty) return null;
+    final cleaned = qty != null ? item.replaceFirst(qty, '').trim() : item;
+    if (cleaned.isEmpty) return null;
 
     return _intent(
       type:   IntentType.orderFood,
       app:    AppTarget.blinkit,
-      params: {'item': item, if (qty != null) 'quantity': qty},
-      speak:  'Blinkit pe $item dhundh raha hoon',
+      params: {'item': cleaned, if (qty != null) 'quantity': qty},
+      speak:  'Blinkit pe $cleaned dhundh raha hoon',
       action: 'blinkit_search',
     );
   }
@@ -99,14 +116,8 @@ class FastIntentEngine {
   // ── Swiggy ──────────────────────────────────────────────────────────────────
   static VaniIntent? _swiggy(String t) {
     if (!t.contains('swiggy')) return null;
-
-    var item = t
-        .replaceAll(RegExp(r'swiggy\s*(pe|par|se|mein|me)?'), '')
-        .replaceAll(RegExp(r'(order karo|mangao|search karo)'), '')
-        .trim();
-
-    item = _clean(item) ?? '';
-    if (item.isEmpty) return null;
+    final item = _extractFoodItem(t, 'swiggy');
+    if (item == null) return null;
 
     return _intent(
       type:   IntentType.orderFood,
@@ -120,14 +131,8 @@ class FastIntentEngine {
   // ── Zomato ──────────────────────────────────────────────────────────────────
   static VaniIntent? _zomato(String t) {
     if (!t.contains('zomato')) return null;
-
-    var item = t
-        .replaceAll(RegExp(r'zomato\s*(pe|par|se|mein|me)?'), '')
-        .replaceAll(RegExp(r'(order karo|mangao|search karo)'), '')
-        .trim();
-
-    item = _clean(item) ?? '';
-    if (item.isEmpty) return null;
+    final item = _extractFoodItem(t, 'zomato');
+    if (item == null) return null;
 
     return _intent(
       type:   IntentType.orderFood,
@@ -136,6 +141,26 @@ class FastIntentEngine {
       speak:  'Zomato pe $item dhundh raha hoon',
       action: 'zomato_search',
     );
+  }
+
+  /// Aggressively strip filler words so we get just the food item.
+  /// Handles: "Swiggy pe mere lie pav bhaji order karo" → "pav bhaji"
+  static String? _extractFoodItem(String t, String appName) {
+    var item = t
+      // Remove app name + postpositions
+      .replaceAll(RegExp('$appName\\s*(pe|par|se|mein|me|ke|ki)?'), ' ')
+      // Remove "mere lie / mere liye / ke lie / ke liye / mujhe / mujhko"
+      .replaceAll(RegExp(r'\b(mere|mujhe|mujhko|hamare|humein|apke|aapke|tere)\s*(lie|liye|ke\s*lie|ke\s*liye)?\b'), ' ')
+      .replaceAll(RegExp(r'\bke\s*(lie|liye)\b'), ' ')
+      // Remove order verbs and intent markers
+      .replaceAll(RegExp(r'\b(order\s*karo|order\s*kar\s*do|mangao|mangwa\s*do|mangwana\s*hai|search\s*karo|dhundh\s*do|dhundo|chahiye|lao|dedo|de\s*do|add\s*karo|ka\s*order|ek)\b'), ' ')
+      // Remove time/urgency fillers
+      .replaceAll(RegExp(r'\b(abhi|jaldi|please|bhai|yaar|hai|hain|h)\b'), ' ')
+      .trim();
+
+    item = _clean(item) ?? '';
+    if (item.isEmpty) return null;
+    return item;
   }
 
   // ── YouTube ─────────────────────────────────────────────────────────────────
@@ -161,7 +186,7 @@ class FastIntentEngine {
     );
   }
 
-  // ── WhatsApp ─────────────────────────────────────────────────────────────────
+  // ── WhatsApp ────────────────────────────────────────────────────────────────
   static VaniIntent? _whatsapp(String t) {
     if (!t.contains('whatsapp') &&
         !t.contains('message karo') &&
@@ -187,7 +212,7 @@ class FastIntentEngine {
     );
   }
 
-  // ── Greetings / Small Talk ───────────────────────────────────────────────────
+  // ── Greetings ───────────────────────────────────────────────────────────────
   static const _greetMap = <String, String>{
     'hello':        'Hello! Kya madad kar sakta hoon?',
     'hi ':          'Hi! Bataiye kya karein?',
@@ -251,7 +276,6 @@ class FastIntentEngine {
     return out.isEmpty ? null : out;
   }
 
-  /// Extract a quantity token like "2kg", "500g", "1 litre" from the item string.
   static String? _extractQty(String text) {
     final m = RegExp(
       r'\d+\s*(?:kg|g|gm|gram|litre|liter|l|piece|pcs|dozen)',
