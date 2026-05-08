@@ -1,10 +1,11 @@
 // lib/core/inference_config.dart
 
-import 'secrets.dart';
+
 
 class InferenceConfig {
 
-  static String get hfToken => Secrets.hfToken;
+  static const String hfToken =
+      String.fromEnvironment('HF_TOKEN', defaultValue: '');
 
   static const bool useTurboQuant = false;
 
