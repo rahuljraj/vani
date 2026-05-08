@@ -213,7 +213,7 @@ class _AppsScreenState extends State<AppsScreen> {
           onChanged: canToggle ? (val) {
             setState(() => app.isEnabled = val);
           } : null,
-          activeColor:   app.color,
+          activeThumbColor: app.color,
           trackColor:    WidgetStateProperty.resolveWith((s) {
             if (s.contains(WidgetState.selected)) {
               return app.color.withValues(alpha: 0.3);

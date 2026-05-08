@@ -62,10 +62,8 @@ User: "Blinkit pe 2kg sugar"
 {"intent":"order_food","app":"blinkit","parameters":{"item":"sugar","quantity":"2kg"},"speak":"Blinkit pe sugar add kar raha hoon","action":"blinkit_search"}
 ''';
 
-  // Primary SD card path — matches the download URL filename
-  static const String _sdCardModelPath = '/sdcard/Download/gemma_model.task.litertlm';
-  // Fallback: alternate name without double extension
-  static const String _sdCardModelPathAlt = '/sdcard/Download/gemma_model.task';
+  static const String _sdCardModelPath    = '/sdcard/Download/gemma_model.litertlm';
+  static const String _sdCardModelPathAlt = '/sdcard/Download/gemma_model.task.litertlm';
 
   Future<File> _modelFile() async {
     final docsDir = await getApplicationDocumentsDirectory();
