@@ -1,10 +1,11 @@
 // lib/core/inference_config.dart
 
-import 'secrets.dart';
-
 class InferenceConfig {
 
-  static String get hfToken => Secrets.hfToken;
+  // HuggingFace token is optional — the model URL in modelDownloadUrl is public.
+  // Pass at build time if you need it: flutter run --dart-define=HF_TOKEN=hf_xxx
+  static const String hfToken =
+      String.fromEnvironment('HF_TOKEN', defaultValue: '');
 
   static const bool useTurboQuant = false;
 
