@@ -211,7 +211,10 @@ class _HomeScreenState extends State<HomeScreen>
   String get _statusText {
     if (_isDownloading) {
       final pct = (_downloadProgress * 100).toStringAsFixed(0);
-      return 'AI download ho rahi hai... $pct%';
+      final label = _loadingStep.isNotEmpty
+          ? _loadingStep
+          : 'AI download ho rahi hai...';
+      return '$label $pct%';
     }
     if (_modelError) return 'Error — Retry karein';
     if (_loadingStep.isNotEmpty) return _loadingStep;
