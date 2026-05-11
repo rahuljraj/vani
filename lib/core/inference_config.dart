@@ -21,7 +21,9 @@ class InferenceConfig {
   static const String modelDownloadUrl = 
     'https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it.litertlm';
 
-  static const double modelSizeBytes = 557 * 1024 * 1024;
+  // Actual file size of gemma-4-E2B-it.litertlm — used as fallback when
+  // the HTTP response omits Content-Length so progress % stays sane.
+  static const double modelSizeBytes = 2590.0 * 1024 * 1024;
 
   // ── Performance Settings for Gemma 4 ───────────
   
