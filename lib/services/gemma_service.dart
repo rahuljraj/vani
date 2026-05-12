@@ -62,8 +62,8 @@ User: "Blinkit pe 2kg sugar"
 {"intent":"order_food","app":"blinkit","parameters":{"item":"sugar","quantity":"2kg"},"speak":"Blinkit pe sugar add kar raha hoon","action":"blinkit_search"}
 ''';
 
-  static const String _sdCardModelPath    = '/sdcard/Download/gemma_model.litertlm';
-  static const String _sdCardModelPathAlt = '/sdcard/Download/gemma_model.task.litertlm';
+  static const String _sdCardModelPath    = '/sdcard/Download/gemma_model.task';
+  static const String _sdCardModelPathAlt = '/sdcard/Download/gemma_model.litertlm';
 
   Future<File> _modelFile() async {
     final docsDir = await getApplicationDocumentsDirectory();
@@ -202,7 +202,7 @@ User: "Blinkit pe 2kg sugar"
       _log.i('Setting model path: ${file.path}');
       await FlutterGemma.installModel(
         modelType: ModelType.gemmaIt,
-        fileType: ModelFileType.litertlm,
+        fileType: ModelFileType.task,
       ).fromFile(file.path).install();
 
       _log.i('Creating model...');

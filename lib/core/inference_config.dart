@@ -12,14 +12,14 @@ class InferenceConfig {
   // ── Active model: Gemma 3 1B (litertlm, ~557 MB) ─
 
   // Filename must match the download URL's actual filename
-  static const String modelFileName = 'gemma_model.litertlm';
+  static const String modelFileName = 'gemma_model.task';
 
   // SD card path — place the model here to skip download
-  static const String activeModelPath = '/sdcard/Download/gemma_model.litertlm';
+  static const String activeModelPath = '/sdcard/Download/gemma_model.task';
 
   // Gemma 3 1B LiteRT-LM build (multi-prefill, q4, ekv2048)
   static const String modelDownloadUrl =
-    'https://huggingface.co/litert-community/Gemma3-1B-IT/resolve/main/Gemma3-1B-IT_multi-prefill-seq_q4_ekv2048.litertlm';
+    'https://huggingface.co/litert-community/Gemma3-1B-IT/resolve/main/Gemma3-1B-IT_multi-prefill-seq_q4_ekv2048.task';
 
   static const double modelSizeBytes = 557 * 1024 * 1024;
 
