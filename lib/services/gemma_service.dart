@@ -225,7 +225,18 @@ User: "Blinkit pe 2kg sugar"
 
   // ── Process Voice Text → Intent ────────────────
   Future<VaniIntent> process(String userText) async {
-    if (userText.trim().isEmpty) return VaniIntent.error();
+    _log.i('🎤 Heard: "$userText"');
+
+    if (userText.trim().isEmpty) {
+      _log.w('Empty transcript — STT returned nothing');
+      return VaniIntent(
+        type: IntentType.chat,
+        app: AppTarget.none,
+        parameters: {},
+        speakText: 'Awaaz nahi aayi. Dobara bolein?',
+        actionCode: 'none',
+      );
+    }
 
     final fast = FastIntentEngine.tryMatch(userText);
     if (fast != null) {

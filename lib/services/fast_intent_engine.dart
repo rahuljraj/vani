@@ -7,7 +7,10 @@ class FastIntentEngine {
     final t = text.toLowerCase().trim();
     if (t.isEmpty) return null;
 
-    return _call(t)
+    // Logging for diagnostic — to see what STT actually gives us
+    print('🔍 FastIntent matching: "$t"');
+
+    final result = _call(t)
         ?? _navigate(t)
         ?? _nearby(t)
         ?? _blinkit(t)
@@ -16,6 +19,14 @@ class FastIntentEngine {
         ?? _youtube(t)
         ?? _whatsapp(t)
         ?? _greeting(t);
+
+    if (result == null) {
+      print('🔍 No FastIntent match for: "$t" — falling through to Gemma');
+    } else {
+      print('🔍 FastIntent matched: ${result.actionCode}');
+    }
+
+    return result;
   }
 
   // ── Call ────────────────────────────────────────────────────────────────────
