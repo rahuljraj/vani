@@ -308,7 +308,7 @@ class _HomeScreenState extends State<HomeScreen>
             if (_isDownloading) ...[
               const SizedBox(height: 4),
               const Text(
-                'Sirf pehli baar — 2.6 GB',
+                'Sirf pehli baar — 557 MB',
                 style: TextStyle(color: VaniColors.textHint, fontSize: 11),
               ),
               const SizedBox(height: 10),

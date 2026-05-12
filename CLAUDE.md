@@ -58,3 +58,16 @@ Key routing rules:
 - Resume a previous session, "where was I" → invoke `/context-restore`
 - Weekly retro, "what did we ship" → invoke `/retro`
 - Security audit, permissions review → invoke `/cso`
+
+## Current Model Configuration — DO NOT CHANGE WITHOUT ASKING
+
+- Active model: **Gemma 3 1B** (litertlm format, ~557 MB)
+- Located on device at: `/sdcard/Download/gemma_model.litertlm`
+- Previous model (deprecated): Gemma 4 E2B (2.4 GB) — do not revert
+- Switching to 1B reduced latency 4–6x. This was deliberate.
+
+If asked to debug Gemma loading:
+- Do NOT change `modelFileName`, `modelDownloadUrl`, `modelSizeBytes`, or `maxContextTokens` in `inference_config.dart`
+- Do NOT change `ModelFileType.litertlm` in `gemma_service.dart`
+- The user has the model file already; download path is dormant
+- If you think there's an inconsistency, STOP and ask before editing
