@@ -65,8 +65,8 @@ class AudioService {
         onResult(_lastWords);
       },
       localeId: 'en_IN',
-      listenFor: const Duration(seconds: 30),
-      pauseFor: const Duration(seconds: 2),
+      listenFor: const Duration(seconds: 15),
+      pauseFor: const Duration(seconds: 4),
       listenOptions: SpeechListenOptions(
         cancelOnError: true,
         partialResults: true,
@@ -74,7 +74,7 @@ class AudioService {
       ),
     );
 
-    _log.d('STT listening started (hi_IN, pauseFor=2s)');
+    _log.d('STT listening started (en_IN, pauseFor=4s)');
     return true;
   }
 
