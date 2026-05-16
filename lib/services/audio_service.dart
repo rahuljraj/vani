@@ -64,7 +64,7 @@ class AudioService {
         _log.d('STT partial: "$_lastWords" final=${result.finalResult}');
         onResult(_lastWords);
       },
-      localeId: 'hi_IN',
+      localeId: 'en_IN',
       listenFor: const Duration(seconds: 30),
       pauseFor: const Duration(seconds: 2),
       listenOptions: SpeechListenOptions(
