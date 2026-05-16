@@ -1,33 +1,76 @@
 // lib/services/fast_intent_engine.dart
 
 import '../models/vani_intent.dart';
+import 'intent_disambiguator.dart';
 
 class FastIntentEngine {
-  static VaniIntent? tryMatch(String text) {
-    final t = text.toLowerCase().trim();
-    if (t.isEmpty) return null;
+ static VaniIntent? tryMatch(String text) {
+  var t = text.toLowerCase().trim();
+  if (t.isEmpty) return null;
 
-    // Logging for diagnostic — to see what STT actually gives us
-    print('🔍 FastIntent matching: "$t"');
+  // Logging for diagnostic — see what STT actually gives us
+  print('🎤 Heard: "$t"');
 
-    final result = _call(t)
-        ?? _navigate(t)
-        ?? _nearby(t)
-        ?? _blinkit(t)
-        ?? _swiggy(t)
-        ?? _zomato(t)
-        ?? _youtube(t)
-        ?? _whatsapp(t)
-        ?? _greeting(t);
+  // Step 1: Normalize common STT phonetic splits and misrecognitions
+  t = t
+    // Brand name normalization
+    .replaceAll(RegExp(r'\bblink\s*kit\b'), 'blinkit')
+    .replaceAll(RegExp(r'\bblink\s*it\b'), 'blinkit')
+    .replaceAll(RegExp(r'\bblinked\b'), 'blinkit')
+    .replaceAll(RegExp(r'\bblinking\b'), 'blinkit')
+    .replaceAll(RegExp(r'\blink\s*it\b'), 'blinkit')
+    .replaceAll(RegExp(r'\bpink\s*it\b'), 'blinkit')
+    .replaceAll(RegExp(r'\bswigy\b'), 'swiggy')
+    .replaceAll(RegExp(r'\bswiggi\b'), 'swiggy')
+    .replaceAll(RegExp(r'\bzomatto\b'), 'zomato')
+    .replaceAll(RegExp(r'\bjomato\b'), 'zomato')
+    .replaceAll(RegExp(r'\bwhats\s*app\b'), 'whatsapp')
+    .replaceAll(RegExp(r'\bwhats\s*up\b'), 'whatsapp')
+    .replaceAll(RegExp(r'\bwatsap\b'), 'whatsapp')
+    .replaceAll(RegExp(r'\byou\s*tube\b'), 'youtube')
+    .replaceAll(RegExp(r'\bgoogle\s*map(s)?\b'), 'maps')
+    // Common Hinglish noun misrecognitions
+    .replaceAll(RegExp(r'\b(aata|ata|aadha|adha|aatta)\b'), 'atta')
+    .replaceAll(RegExp(r'\b(doodh|doodt|dudh)\b'), 'doodh')
+    // Verb misrecognitions
+    .replaceAll(RegExp(r'\b(doondo|dundho|doondho|dhundo|dhondo|dundo)\b'), 'dhundho')
+    .replaceAll(RegExp(r'\bchaalao\b'), 'chalao')
+    .replaceAll(RegExp(r'\bsunaao\b'), 'sunao')
+    // Preposition fixes (STT often hears 'per' or 'pr' instead of 'pe')
+    .replaceAll(RegExp(r'\bper\b'), 'pe')
+    .replaceAll(RegExp(r'\bpr\b'), 'pe')
+    .replaceAll(RegExp(r'\bpaar\b'), 'pe');
 
-    if (result == null) {
-      print('🔍 No FastIntent match for: "$t" — falling through to Gemma');
-    } else {
-      print('🔍 FastIntent matched: ${result.actionCode}');
+  print('🔍 FastIntent normalized: "$t"');
+
+  // Step 2: Disambiguate ambiguous brand mentions (Blinkit vs LinkedIn, etc.)
+  final resolved = IntentDisambiguator.resolve(t);
+  if (resolved != null) {
+    print('🎯 Disambiguator resolved to: $resolved');
+    if (!t.contains(resolved)) {
+      t = '$resolved $t';
     }
-
-    return result;
   }
+
+  // Step 3: Run the match chain
+  final result = _call(t)
+      ?? _navigate(t)
+      ?? _nearby(t)
+      ?? _blinkit(t)
+      ?? _swiggy(t)
+      ?? _zomato(t)
+      ?? _youtube(t)
+      ?? _whatsapp(t)
+      ?? _greeting(t);
+
+  if (result == null) {
+    print('🔍 No FastIntent match for: "$t" — falling through to Gemma');
+  } else {
+    print('🔍 FastIntent matched: ${result.actionCode}');
+  }
+
+  return result;
+}
 
   // ── Call ────────────────────────────────────────────────────────────────────
   static VaniIntent? _call(String t) {
