@@ -10,6 +10,7 @@ import 'whatsapp_action.dart';
 import 'call_action.dart';
 import '../../models/vani_intent.dart';
 import '../../core/constants.dart';
+import '../app_registry.dart';
 
 class ActionRouter {
   final _log      = Logger();
@@ -18,6 +19,7 @@ class ActionRouter {
   final _swiggy   = SwiggyAction();
   final _whatsapp = WhatsAppAction();
   final _call     = CallAction();
+ 
 
   Future<void> execute(VaniIntent intent) async {
     _log.d('Routing: ${intent.type} → ${intent.app} action=${intent.actionCode}');
@@ -30,6 +32,14 @@ class ActionRouter {
       await _call.dial(intent.parameters['contact'] ?? '');
       return;
     }
+     if (intent.actionCode == 'app_launch') {
+       final pkg = intent.parameters['package'] ?? '';
+     if (pkg.isNotEmpty) {
+        await AppRegistry.instance.launchApp(pkg);
+        }
+       return;
+      }
+
 
     switch (intent.app) {
       case AppTarget.googleMaps: await _handleMaps(intent);

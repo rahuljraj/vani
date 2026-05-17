@@ -2,6 +2,8 @@
 
 import '../models/vani_intent.dart';
 import 'intent_disambiguator.dart';
+import 'app_registry.dart';
+
 
 class FastIntentEngine {
  static VaniIntent? tryMatch(String text) {
@@ -54,6 +56,7 @@ class FastIntentEngine {
 
   // Step 3: Run the match chain
   final result = _call(t)
+      ?? _openApp(t)  
       ?? _navigate(t)
       ?? _nearby(t)
       ?? _blinkit(t)
@@ -99,6 +102,33 @@ class FastIntentEngine {
       action: 'phone_dial',
     );
   }
+   static VaniIntent? _openApp(String t) {
+  // Matches: "open X", "X khol do", "X kholo", "launch X"
+  String? appName;
+
+  if (t.contains('open '))         appName = _after(t, 'open ');
+  else if (t.contains(' khol do')) appName = t.split(' khol do').first.trim();
+  else if (t.contains(' kholo'))   appName = t.split(' kholo').first.trim();
+  else if (t.contains('launch '))  appName = _after(t, 'launch ');
+  else if (t.endsWith(' khol'))    appName = t.substring(0, t.length - 5).trim();
+
+  if (appName == null || appName.isEmpty) return null;
+
+  // Ask AppRegistry if this app is installed
+  final app = AppRegistry.instance.findByName(appName);
+  if (app == null) return null;
+
+  return _intent(
+    type:   IntentType.chat,
+    app:    AppTarget.none,
+    params: {'package': app.packageName, 'name': app.displayName},
+    speak:  '${app.displayName} khol raha hoon',
+    action: 'app_launch',
+  );
+ }
+
+
+
 
   // ── Navigation ──────────────────────────────────────────────────────────────
   static VaniIntent? _navigate(String t) {
@@ -337,4 +367,6 @@ class FastIntentEngine {
     ).firstMatch(text);
     return m?.group(0);
   }
+   
+
 }

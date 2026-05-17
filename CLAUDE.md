@@ -5,7 +5,7 @@ Privacy-first, on-device voice AI assistant for Android. Hindi/English/Hinglish.
 ## Tech Stack
 
 - **UI**: Flutter (Dart)
-- **On-device AI**: Gemma 4 E2B via `flutter_gemma`
+- **On-device AI**: Gemma 3 1B via `flutter_gemma`
 - **Voice**: Android microphone + `record` package → Android native TTS (hi-IN / en-IN)
 - **App control**: Android Accessibility Service (`VaniAccessibilityService.kt`)
 - **App launch**: Android Intents via `url_launcher`
