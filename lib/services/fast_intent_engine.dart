@@ -102,36 +102,49 @@ class FastIntentEngine {
       action: 'phone_dial',
     );
   }
-   static VaniIntent? _openApp(String t) {
+  
+     static VaniIntent? _openApp(String t) {
   String? appName;
 
-  // Pattern 1: "open X" or "open X karo" (app name AFTER "open")
-  final openMatch = RegExp(r'\bopen\s+(.+?)(?:\s+karo|\s+kar\s+do|\s+please)?\s*$').firstMatch(t);
-  if (openMatch != null) {
-    appName = openMatch.group(1)?.trim();
+  // Pattern 1 (MOST SPECIFIC FIRST): "X open karo" / "X open kar do" — app BEFORE "open"
+  final beforeOpenMatch = RegExp(r'^(.+?)\s+open(?:\s+karo|\s+kar\s+do)\s*$').firstMatch(t);
+  if (beforeOpenMatch != null) {
+    appName = beforeOpenMatch.group(1)?.trim();
   }
 
-  // Pattern 2: "launch X"
-  if (appName == null) {
-    final launchMatch = RegExp(r'\blaunch\s+(.+?)\s*$').firstMatch(t);
-    if (launchMatch != null) appName = launchMatch.group(1)?.trim();
-  }
-
-  // Pattern 3: "X khol do" / "X kholo" / "X khol"
+  // Pattern 2: "X khol do" / "X kholo" / "X khol" — app BEFORE "khol"
   if (appName == null) {
     final kholMatch = RegExp(r'^(.+?)\s+khol(?:\s+do|o)?\s*$').firstMatch(t);
     if (kholMatch != null) appName = kholMatch.group(1)?.trim();
   }
 
-  // Pattern 4: "X open karo" / "X open" (app name BEFORE "open")
+  // Pattern 3: "X open" (no trailing verb) — app BEFORE "open"
   if (appName == null) {
-    final beforeOpenMatch = RegExp(r'^(.+?)\s+open(?:\s+karo|\s+kar\s+do)?\s*$').firstMatch(t);
-    if (beforeOpenMatch != null) appName = beforeOpenMatch.group(1)?.trim();
+    final bareOpenMatch = RegExp(r'^(.+?)\s+open\s*$').firstMatch(t);
+    if (bareOpenMatch != null) appName = bareOpenMatch.group(1)?.trim();
+  }
+
+  // Pattern 4 (LESS SPECIFIC): "open X" — but X must NOT be a filler word
+  if (appName == null) {
+    final openMatch = RegExp(r'^open\s+(.+?)(?:\s+karo|\s+kar\s+do|\s+please)?\s*$').firstMatch(t);
+    if (openMatch != null) {
+      final candidate = openMatch.group(1)?.trim() ?? '';
+      // Reject if it's just a filler word
+      if (!RegExp(r'^(karo|kar\s*do|please|abhi|jaldi)$').hasMatch(candidate)) {
+        appName = candidate;
+      }
+    }
+  }
+
+  // Pattern 5: "launch X"
+  if (appName == null) {
+    final launchMatch = RegExp(r'^launch\s+(.+?)\s*$').firstMatch(t);
+    if (launchMatch != null) appName = launchMatch.group(1)?.trim();
   }
 
   if (appName == null || appName.isEmpty) return null;
 
-  // Clean filler words
+  // Strip filler words from extracted name
   appName = appName
     .replaceAll(RegExp(r'\b(please|abhi|jaldi)\b'), '')
     .trim();
@@ -158,6 +171,8 @@ class FastIntentEngine {
     action: 'app_launch',
   );
 }
+
+
 
   // ── Navigation ──────────────────────────────────────────────────────────────
   static VaniIntent? _navigate(String t) {
