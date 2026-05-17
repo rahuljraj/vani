@@ -56,16 +56,19 @@ class AudioService {
     }
 
     _lastWords = '';
+    _gotFinalResult = false;  
     _autoStopCallback = onAutoStop;
 
     await _stt.listen(
-      onResult: (result) {
-        _lastWords = result.recognizedWords;
-        _log.d('STT partial: "$_lastWords" final=${result.finalResult}');
-         if (result.finalResult) {
-           onResult(_lastWords);
-          }
-      },
+        onResult: (result) {
+           _lastWords = result.recognizedWords;
+           _log.d('STT partial: "$_lastWords" final=${result.finalResult}');
+          if (result.finalResult) {
+            _gotFinalResult = true;
+               onResult(_lastWords);
+               }
+         },
+
       localeId: 'en_IN',
       listenFor: const Duration(seconds: 15),
       pauseFor: const Duration(seconds: 4),
@@ -80,11 +83,23 @@ class AudioService {
     return true;
   }
 
-  Future<String> stopSttListening() async {
-    _autoStopCallback = null;
-    if (_stt.isListening) await _stt.stop();
-    _log.d('STT stopped. Result: "$_lastWords"');
-    return _lastWords;
+  // Tracks whether the latest STT result was marked final
+  bool _gotFinalResult = false;
+
+Future<String> stopSttListening() async {
+  // Tell STT we're done capturing
+  await _stt.stop();
+
+  // Wait briefly for STT to deliver the final result.
+  // Google STT typically delivers final ~200-500ms after stop().
+  final deadline = DateTime.now().add(const Duration(milliseconds: 1200));
+  while (!_gotFinalResult && DateTime.now().isBefore(deadline)) {
+    await Future.delayed(const Duration(milliseconds: 50));
+  }
+
+  _log.d('STT stopped. Result: "$_lastWords" final=$_gotFinalResult');
+  _gotFinalResult = false; // reset for next session
+  return _lastWords;
   }
 
   // ── Raw recording (kept for future audio→Gemma) ──
