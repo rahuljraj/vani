@@ -62,7 +62,9 @@ class AudioService {
       onResult: (result) {
         _lastWords = result.recognizedWords;
         _log.d('STT partial: "$_lastWords" final=${result.finalResult}');
-        onResult(_lastWords);
+         if (result.finalResult) {
+           onResult(_lastWords);
+          }
       },
       localeId: 'en_IN',
       listenFor: const Duration(seconds: 15),

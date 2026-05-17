@@ -38,6 +38,19 @@ class MainActivity : FlutterActivity() {
                     val packageName = call.argument<String>("packageName") ?: ""
                     result.success(isPackageInstalled(packageName))
                 }
+                "getInstalledApps" -> {
+                 result.success(InstalledAppsScanner.scan(this))
+                }
+                "launchApp" -> {
+                val packageName = call.argument<String>("packageName") ?: ""
+                val intent = packageManager.getLaunchIntentForPackage(packageName)
+                 if (intent != null) {
+                  startActivity(intent)
+                  result.success(true)
+                 } else {
+                  result.success(false)
+                 }
+                }
                 else -> result.notImplemented()
             }
         }

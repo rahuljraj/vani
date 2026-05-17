@@ -103,20 +103,52 @@ class FastIntentEngine {
     );
   }
    static VaniIntent? _openApp(String t) {
-  // Matches: "open X", "X khol do", "X kholo", "launch X"
   String? appName;
 
-  if (t.contains('open '))         appName = _after(t, 'open ');
-  else if (t.contains(' khol do')) appName = t.split(' khol do').first.trim();
-  else if (t.contains(' kholo'))   appName = t.split(' kholo').first.trim();
-  else if (t.contains('launch '))  appName = _after(t, 'launch ');
-  else if (t.endsWith(' khol'))    appName = t.substring(0, t.length - 5).trim();
+  // Pattern 1: "open X" or "open X karo" (app name AFTER "open")
+  final openMatch = RegExp(r'\bopen\s+(.+?)(?:\s+karo|\s+kar\s+do|\s+please)?\s*$').firstMatch(t);
+  if (openMatch != null) {
+    appName = openMatch.group(1)?.trim();
+  }
+
+  // Pattern 2: "launch X"
+  if (appName == null) {
+    final launchMatch = RegExp(r'\blaunch\s+(.+?)\s*$').firstMatch(t);
+    if (launchMatch != null) appName = launchMatch.group(1)?.trim();
+  }
+
+  // Pattern 3: "X khol do" / "X kholo" / "X khol"
+  if (appName == null) {
+    final kholMatch = RegExp(r'^(.+?)\s+khol(?:\s+do|o)?\s*$').firstMatch(t);
+    if (kholMatch != null) appName = kholMatch.group(1)?.trim();
+  }
+
+  // Pattern 4: "X open karo" / "X open" (app name BEFORE "open")
+  if (appName == null) {
+    final beforeOpenMatch = RegExp(r'^(.+?)\s+open(?:\s+karo|\s+kar\s+do)?\s*$').firstMatch(t);
+    if (beforeOpenMatch != null) appName = beforeOpenMatch.group(1)?.trim();
+  }
 
   if (appName == null || appName.isEmpty) return null;
 
-  // Ask AppRegistry if this app is installed
+  // Clean filler words
+  appName = appName
+    .replaceAll(RegExp(r'\b(please|abhi|jaldi)\b'), '')
+    .trim();
+
+  if (appName.isEmpty) return null;
+
+  print('🚀 _openApp extracted name: "$appName"');
+
   final app = AppRegistry.instance.findByName(appName);
-  if (app == null) return null;
+
+  if (app == null) {
+    print('🚀 _openApp NO MATCH for "$appName"');
+    print('🚀 Sample apps: ${AppRegistry.instance.apps.take(20).map((a) => a.displayName).join(", ")}');
+    return null;
+  }
+
+  print('🚀 _openApp MATCHED: ${app.displayName} (${app.packageName})');
 
   return _intent(
     type:   IntentType.chat,
@@ -125,10 +157,7 @@ class FastIntentEngine {
     speak:  '${app.displayName} khol raha hoon',
     action: 'app_launch',
   );
- }
-
-
-
+}
 
   // ── Navigation ──────────────────────────────────────────────────────────────
   static VaniIntent? _navigate(String t) {
