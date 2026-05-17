@@ -71,3 +71,26 @@ If asked to debug Gemma loading:
 - Do NOT change `ModelFileType.task` in `gemma_service.dart`
 - The user has the model file already; download path is dormant
 - If you think there's an inconsistency, STOP and ask before editing
+
+## v0.1 MVP Shipped (May 17, 2026)
+
+**Working features:**
+- Gemma 3 1B on-device LLM fallback (.task format, 557MB, /sdcard/Download/gemma_model.task)
+- STT in en_IN locale (Hinglish in Latin script)
+- FastIntentEngine: 9 matchers + brand normalization + IntentDisambiguator
+- InstalledAppsScanner: detects all user apps (98 on test device)
+- Generic voice launcher: opens any installed app by name
+- Smart Blinkit deep link search
+- Confirmed working: LinkedIn, Instagram, WhatsApp, Blinkit voice commands
+
+**Architecture:**
+- Privacy-first, fully on-device
+- CLI pattern over MCP
+- Toggle-based app permissions
+- Tagged: v0.1-mvp-voice-launch
+
+**Known gaps (Phase 2):**
+- TTS blocks app launch (~1.6s avoidable latency)
+- Cold start = 17s (foreground service to keep Gemma warm)
+- No wake word yet (Picovoice planned for v1.1)
+- Per-app deep links only for Blinkit so far (LinkedIn jobs, Spotify play, Uber book queued)
