@@ -5,11 +5,14 @@ import 'package:flutter/services.dart';
 import 'package:flutter_gemma/flutter_gemma.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app.dart';
+import 'services/app_registry.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await FlutterGemma.initialize();
+
+  await AppRegistry.instance.loadInstalledApps();
 
   // Lock to portrait only
   await SystemChrome.setPreferredOrientations([

@@ -24,24 +24,6 @@ class AudioService {
   String get lastWords   => _lastWords;
   bool   get isListening => _stt.isListening;
 
-  Future<bool> _ensureSttReady() async {
-    if (_sttReady) return true;
-    _sttReady = await _stt.initialize(
-      onError:  (error)  => _log.e('STT error: ${error.errorMsg}'),
-      onStatus: (status) {
-        _log.d('STT status: $status');
-        // 'done' or 'notListening' fires when STT auto-stops on silence
-        if ((status == 'done' || status == 'notListening')
-            && _autoStopCallback != null) {
-          _autoStopCallback?.call();
-          _autoStopCallback = null;
-        }
-      },
-    );
-    if (!_sttReady) _log.w('Speech recognition not available');
-    return _sttReady;
-  }
-
   /// Start live Hindi STT.
   /// [onResult] fires on every partial/final transcript.
   /// [onAutoStop] fires when STT detects end-of-speech (after 2s silence).
@@ -49,36 +31,75 @@ class AudioService {
     required void Function(String text) onResult,
     void Function()? onAutoStop,
   }) async {
-    if (!await _ensureSttReady()) return false;
-    if (_stt.isListening) await _stt.stop();
+    // Always fully cancel any prior session
+    if (_stt.isListening) {
+      await _stt.cancel();
+    }
 
-    _lastWords        = '';
+    // Force re-initialization every time — speech_to_text on OnePlus
+    // gets into a stuck state after first session if reused
+    _sttReady = await _stt.initialize(
+      onError: (error) => _log.e('STT error: ${error.errorMsg} permanent=${error.permanent}'),
+      onStatus: (status) {
+        _log.d('STT status: $status');
+        if ((status == 'done' || status == 'notListening')
+            && _autoStopCallback != null) {
+          _autoStopCallback?.call();
+          _autoStopCallback = null;
+        }
+      },
+    );
+
+    if (!_sttReady) {
+      _log.w('Speech recognition not available');
+      return false;
+    }
+
+    _lastWords = '';
+    _gotFinalResult = false;  
     _autoStopCallback = onAutoStop;
 
     await _stt.listen(
-      onResult: (result) {
-        _lastWords = result.recognizedWords;
-        onResult(_lastWords);
-      },
-      localeId:    'hi_IN',
-      listenFor:   const Duration(seconds: 30),  // hard cap
-      pauseFor:    const Duration(seconds: 2),   // EoS after 2s silence
+        onResult: (result) {
+           _lastWords = result.recognizedWords;
+           _log.d('STT partial: "$_lastWords" final=${result.finalResult}');
+          if (result.finalResult) {
+            _gotFinalResult = true;
+               onResult(_lastWords);
+               }
+         },
+
+      localeId: 'en_IN',
+      listenFor: const Duration(seconds: 15),
+      pauseFor: const Duration(seconds: 4),
       listenOptions: SpeechListenOptions(
-        cancelOnError:  true,
+        cancelOnError: true,
         partialResults: true,
-        listenMode:     ListenMode.dictation,
+        listenMode: ListenMode.dictation,
       ),
     );
 
-    _log.d('STT listening (hi_IN, pauseFor=2s)');
+    _log.d('STT listening started (en_IN, pauseFor=4s)');
     return true;
   }
 
-  Future<String> stopSttListening() async {
-    _autoStopCallback = null;
-    if (_stt.isListening) await _stt.stop();
-    _log.d('STT stopped. Result: "$_lastWords"');
-    return _lastWords;
+  // Tracks whether the latest STT result was marked final
+  bool _gotFinalResult = false;
+
+Future<String> stopSttListening() async {
+  // Tell STT we're done capturing
+  await _stt.stop();
+
+  // Wait briefly for STT to deliver the final result.
+  // Google STT typically delivers final ~200-500ms after stop().
+  final deadline = DateTime.now().add(const Duration(milliseconds: 1200));
+  while (!_gotFinalResult && DateTime.now().isBefore(deadline)) {
+    await Future.delayed(const Duration(milliseconds: 50));
+  }
+
+  _log.d('STT stopped. Result: "$_lastWords" final=$_gotFinalResult');
+  _gotFinalResult = false; // reset for next session
+  return _lastWords;
   }
 
   // ── Raw recording (kept for future audio→Gemma) ──

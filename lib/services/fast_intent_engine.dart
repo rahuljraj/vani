@@ -1,22 +1,79 @@
 // lib/services/fast_intent_engine.dart
 
 import '../models/vani_intent.dart';
+import 'intent_disambiguator.dart';
+import 'app_registry.dart';
+
 
 class FastIntentEngine {
-  static VaniIntent? tryMatch(String text) {
-    final t = text.toLowerCase().trim();
-    if (t.isEmpty) return null;
+ static VaniIntent? tryMatch(String text) {
+  var t = text.toLowerCase().trim();
+  if (t.isEmpty) return null;
 
-    return _call(t)
-        ?? _navigate(t)
-        ?? _nearby(t)
-        ?? _blinkit(t)
-        ?? _swiggy(t)
-        ?? _zomato(t)
-        ?? _youtube(t)
-        ?? _whatsapp(t)
-        ?? _greeting(t);
+  // Logging for diagnostic — see what STT actually gives us
+  print('🎤 Heard: "$t"');
+
+  // Step 1: Normalize common STT phonetic splits and misrecognitions
+  t = t
+    // Brand name normalization
+    .replaceAll(RegExp(r'\bblink\s*kit\b'), 'blinkit')
+    .replaceAll(RegExp(r'\bblink\s*it\b'), 'blinkit')
+    .replaceAll(RegExp(r'\bblinked\b'), 'blinkit')
+    .replaceAll(RegExp(r'\bblinking\b'), 'blinkit')
+    .replaceAll(RegExp(r'\blink\s*it\b'), 'blinkit')
+    .replaceAll(RegExp(r'\bpink\s*it\b'), 'blinkit')
+    .replaceAll(RegExp(r'\bswigy\b'), 'swiggy')
+    .replaceAll(RegExp(r'\bswiggi\b'), 'swiggy')
+    .replaceAll(RegExp(r'\bzomatto\b'), 'zomato')
+    .replaceAll(RegExp(r'\bjomato\b'), 'zomato')
+    .replaceAll(RegExp(r'\bwhats\s*app\b'), 'whatsapp')
+    .replaceAll(RegExp(r'\bwhats\s*up\b'), 'whatsapp')
+    .replaceAll(RegExp(r'\bwatsap\b'), 'whatsapp')
+    .replaceAll(RegExp(r'\byou\s*tube\b'), 'youtube')
+    .replaceAll(RegExp(r'\bgoogle\s*map(s)?\b'), 'maps')
+    // Common Hinglish noun misrecognitions
+    .replaceAll(RegExp(r'\b(aata|ata|aadha|adha|aatta)\b'), 'atta')
+    .replaceAll(RegExp(r'\b(doodh|doodt|dudh)\b'), 'doodh')
+    // Verb misrecognitions
+    .replaceAll(RegExp(r'\b(doondo|dundho|doondho|dhundo|dhondo|dundo)\b'), 'dhundho')
+    .replaceAll(RegExp(r'\bchaalao\b'), 'chalao')
+    .replaceAll(RegExp(r'\bsunaao\b'), 'sunao')
+    // Preposition fixes (STT often hears 'per' or 'pr' instead of 'pe')
+    .replaceAll(RegExp(r'\bper\b'), 'pe')
+    .replaceAll(RegExp(r'\bpr\b'), 'pe')
+    .replaceAll(RegExp(r'\bpaar\b'), 'pe');
+
+  print('🔍 FastIntent normalized: "$t"');
+
+  // Step 2: Disambiguate ambiguous brand mentions (Blinkit vs LinkedIn, etc.)
+  final resolved = IntentDisambiguator.resolve(t);
+  if (resolved != null) {
+    print('🎯 Disambiguator resolved to: $resolved');
+    if (!t.contains(resolved)) {
+      t = '$resolved $t';
+    }
   }
+
+  // Step 3: Run the match chain
+  final result = _call(t)
+      ?? _openApp(t)  
+      ?? _navigate(t)
+      ?? _nearby(t)
+      ?? _blinkit(t)
+      ?? _swiggy(t)
+      ?? _zomato(t)
+      ?? _youtube(t)
+      ?? _whatsapp(t)
+      ?? _greeting(t);
+
+  if (result == null) {
+    print('🔍 No FastIntent match for: "$t" — falling through to Gemma');
+  } else {
+    print('🔍 FastIntent matched: ${result.actionCode}');
+  }
+
+  return result;
+}
 
   // ── Call ────────────────────────────────────────────────────────────────────
   static VaniIntent? _call(String t) {
@@ -45,6 +102,77 @@ class FastIntentEngine {
       action: 'phone_dial',
     );
   }
+  
+     static VaniIntent? _openApp(String t) {
+  String? appName;
+
+  // Pattern 1 (MOST SPECIFIC FIRST): "X open karo" / "X open kar do" — app BEFORE "open"
+  final beforeOpenMatch = RegExp(r'^(.+?)\s+open(?:\s+karo|\s+kar\s+do)\s*$').firstMatch(t);
+  if (beforeOpenMatch != null) {
+    appName = beforeOpenMatch.group(1)?.trim();
+  }
+
+  // Pattern 2: "X khol do" / "X kholo" / "X khol" — app BEFORE "khol"
+  if (appName == null) {
+    final kholMatch = RegExp(r'^(.+?)\s+khol(?:\s+do|o)?\s*$').firstMatch(t);
+    if (kholMatch != null) appName = kholMatch.group(1)?.trim();
+  }
+
+  // Pattern 3: "X open" (no trailing verb) — app BEFORE "open"
+  if (appName == null) {
+    final bareOpenMatch = RegExp(r'^(.+?)\s+open\s*$').firstMatch(t);
+    if (bareOpenMatch != null) appName = bareOpenMatch.group(1)?.trim();
+  }
+
+  // Pattern 4 (LESS SPECIFIC): "open X" — but X must NOT be a filler word
+  if (appName == null) {
+    final openMatch = RegExp(r'^open\s+(.+?)(?:\s+karo|\s+kar\s+do|\s+please)?\s*$').firstMatch(t);
+    if (openMatch != null) {
+      final candidate = openMatch.group(1)?.trim() ?? '';
+      // Reject if it's just a filler word
+      if (!RegExp(r'^(karo|kar\s*do|please|abhi|jaldi)$').hasMatch(candidate)) {
+        appName = candidate;
+      }
+    }
+  }
+
+  // Pattern 5: "launch X"
+  if (appName == null) {
+    final launchMatch = RegExp(r'^launch\s+(.+?)\s*$').firstMatch(t);
+    if (launchMatch != null) appName = launchMatch.group(1)?.trim();
+  }
+
+  if (appName == null || appName.isEmpty) return null;
+
+  // Strip filler words from extracted name
+  appName = appName
+    .replaceAll(RegExp(r'\b(please|abhi|jaldi)\b'), '')
+    .trim();
+
+  if (appName.isEmpty) return null;
+
+  print('🚀 _openApp extracted name: "$appName"');
+
+  final app = AppRegistry.instance.findByName(appName);
+
+  if (app == null) {
+    print('🚀 _openApp NO MATCH for "$appName"');
+    print('🚀 Sample apps: ${AppRegistry.instance.apps.take(20).map((a) => a.displayName).join(", ")}');
+    return null;
+  }
+
+  print('🚀 _openApp MATCHED: ${app.displayName} (${app.packageName})');
+
+  return _intent(
+    type:   IntentType.chat,
+    app:    AppTarget.none,
+    params: {'package': app.packageName, 'name': app.displayName},
+    speak:  '${app.displayName} khol raha hoon',
+    action: 'app_launch',
+  );
+}
+
+
 
   // ── Navigation ──────────────────────────────────────────────────────────────
   static VaniIntent? _navigate(String t) {
@@ -283,4 +411,6 @@ class FastIntentEngine {
     ).firstMatch(text);
     return m?.group(0);
   }
+   
+
 }

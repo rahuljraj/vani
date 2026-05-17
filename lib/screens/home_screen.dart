@@ -28,6 +28,7 @@ class _HomeScreenState extends State<HomeScreen>
   String    _response         = '';
   bool      _modelReady       = false;
   bool      _modelError       = false;
+  String    _modelErrorReason = '';
   bool      _isDownloading    = false;
   double    _downloadProgress = 0.0;
   String    _loadingStep      = '';
@@ -68,8 +69,22 @@ class _HomeScreenState extends State<HomeScreen>
       ));
   }
 
+  void _failWith(String reason) {
+    if (!mounted) return;
+    setState(() {
+      _modelError       = true;
+      _modelErrorReason = reason;
+      _loadingStep      = '';
+      _isDownloading    = false;
+    });
+  }
+
   Future<void> _initModel() async {
-    if (mounted) setState(() { _modelError = false; _loadingStep = 'Shuru ho rahi hai...'; });
+    if (mounted) setState(() {
+      _modelError       = false;
+      _modelErrorReason = '';
+      _loadingStep      = 'Shuru ho rahi hai...';
+    });
 
     // Check sdcard or docs directory for model
     final modelAvailable = await GemmaService.instance.isModelDownloaded();
@@ -85,7 +100,11 @@ class _HomeScreenState extends State<HomeScreen>
 
       if (mounted) setState(() => _isDownloading = false);
       if (!ok) {
-        if (mounted) setState(() { _modelError = true; _loadingStep = ''; });
+        _failWith(
+          'Model download fail ho gaya.\n'
+          'Internet check karein, ya model file ko\n'
+          '/sdcard/Download/gemma_model.litertlm pe daalein.',
+        );
         return;
       }
     }
@@ -96,7 +115,11 @@ class _HomeScreenState extends State<HomeScreen>
       if (mounted) setState(() => _loadingStep = 'Storage access chahiye — "Allow" karein');
       final granted = await PermissionService.instance.requestAllFilesAccess();
       if (!granted) {
-        if (mounted) setState(() { _modelError = true; _loadingStep = ''; });
+        _failWith(
+          'Storage permission nahi mila.\n'
+          'Settings → Apps → VANI → Permissions\n'
+          'mein "All files access" allow karein.',
+        );
         return;
       }
     }
@@ -113,13 +136,22 @@ class _HomeScreenState extends State<HomeScreen>
       },
     );
     if (mounted) setState(() => _isDownloading = false);
+    if (!ok) {
+      _failWith(
+        'Model load fail ho gaya.\n'
+        'File corrupt ho sakti hai, ya phone mein\n'
+        'kaafi RAM/storage nahi hai (6GB+ chahiye).',
+      );
+      return;
+    }
     if (mounted) {
       setState(() {
-        _modelReady  = ok;
-        _modelError  = !ok;
-        _loadingStep = '';
+        _modelReady       = true;
+        _modelError       = false;
+        _modelErrorReason = '';
+        _loadingStep      = '';
       });
-      if (ok) await TtsService.instance.speak('VANI ready hai. Bataiye kya karein?');
+      await TtsService.instance.speak('VANI ready hai. Bataiye kya karein?');
     }
   }
 
@@ -211,7 +243,10 @@ class _HomeScreenState extends State<HomeScreen>
   String get _statusText {
     if (_isDownloading) {
       final pct = (_downloadProgress * 100).toStringAsFixed(0);
-      return 'AI download ho rahi hai... $pct%';
+      final label = _loadingStep.isNotEmpty
+          ? _loadingStep
+          : 'AI download ho rahi hai...';
+      return '$label $pct%';
     }
     if (_modelError) return 'Error — Retry karein';
     if (_loadingStep.isNotEmpty) return _loadingStep;
@@ -249,6 +284,19 @@ class _HomeScreenState extends State<HomeScreen>
             _buildStatusText(),
             if (_modelError) ...[
               const SizedBox(height: 8),
+              if (_modelErrorReason.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: Text(
+                    _modelErrorReason,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color:    VaniColors.textHint,
+                      fontSize: 12,
+                      height:   1.4,
+                    ),
+                  ),
+                ),
               TextButton(
                 onPressed: _retryModel,
                 child: const Text(
@@ -260,7 +308,7 @@ class _HomeScreenState extends State<HomeScreen>
             if (_isDownloading) ...[
               const SizedBox(height: 4),
               const Text(
-                'Sirf pehli baar — 2.4 GB',
+                'Sirf pehli baar — 557 MB',
                 style: TextStyle(color: VaniColors.textHint, fontSize: 11),
               ),
               const SizedBox(height: 10),
