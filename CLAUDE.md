@@ -94,3 +94,28 @@ If asked to debug Gemma loading:
 - Cold start = 17s (foreground service to keep Gemma warm)
 - No wake word yet (Picovoice planned for v1.1)
 - Per-app deep links only for Blinkit so far (LinkedIn jobs, Spotify play, Uber book queued)
+
+
+   ## Strategic Update — Swiggy MCP Discovery (May 17, 2026, late night)
+
+   **VANI's real moat:** Voice-to-MCP bridge for Indian apps.
+
+   Swiggy launched 3 MCP servers + Builders Club in April 2026:
+   - mcp.swiggy.com/food (restaurants, ordering)
+   - mcp.swiggy.com/im (Instamart groceries)
+   - mcp.swiggy.com/dineout (table bookings)
+   - 18+ API tools, COD orders supported, free dineout bookings
+
+   Apply at: mcp.swiggy.com/builders
+
+   **Updated thesis:** As Indian app ecosystem ships MCP (Swiggy first, others to follow),
+   VANI becomes the consumer-facing voice + Hinglish layer on top.
+
+   **Phase 2 priority change:**
+   - Was: deep-link search for top 5 apps
+   - Now: deep-link search PLUS Swiggy Builders Club application
+   - If accepted: full conversational ordering via MCP (pav bhaji flow becomes real)
+
+   **What's still gated by regulation:** UPI payment auto-initiation. RBI rules apply.
+   Approach: VANI navigates to checkout screen, user enters UPI PIN manually. That's the line.
+   
