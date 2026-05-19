@@ -12,6 +12,7 @@ import '../../models/vani_intent.dart';
 import '../../core/constants.dart';
 import '../app_registry.dart';
 
+
 class ActionRouter {
   final _log      = Logger();
   final _maps     = MapsAction();
@@ -39,7 +40,34 @@ class ActionRouter {
         }
        return;
       }
+      
+       // Generic deep-link search — fires URI directly, falls back to app_launch
+if (intent.actionCode == 'app_search_deeplink') {
+  final uriStr = intent.parameters['uri']     ?? '';
+  final pkg    = intent.parameters['package'] ?? '';
+  final name   = intent.parameters['name']    ?? 'app';
 
+  if (uriStr.isNotEmpty) {
+    final uri = Uri.parse(uriStr);
+    _log.i('🔎 Deep-link launch: $name → $uri');
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+        return;
+      }
+    } catch (e) {
+      _log.w('Deep-link failed, falling back to app_launch: $e');
+    }
+  }
+
+  // Fallback: just open the app
+  if (pkg.isNotEmpty) {
+    _log.i('🔎 Deep-link fallback: opening $name ($pkg)');
+    await AppRegistry.instance.launchApp(pkg);
+  }
+  return;
+}
+           
 
     switch (intent.app) {
       case AppTarget.googleMaps: await _handleMaps(intent);
@@ -87,16 +115,27 @@ class ActionRouter {
     if (item.isNotEmpty) await _swiggy.search(item);
   }
 
-  Future<void> _handleZomato(VaniIntent intent) async {
-    final item = intent.parameters['item'] ?? intent.parameters['query'] ?? '';
-    if (item.isEmpty) return;
-    final enc = Uri.encodeComponent(item);
-    await launchUrl(
-      Uri.parse('https://www.zomato.com/search?q=$enc'),
-      mode: LaunchMode.externalApplication,
-    );
+   Future<void> _handleZomato(VaniIntent intent) async {
+  final item = intent.parameters['item'] ?? intent.parameters['query'] ?? '';
+  if (item.isEmpty) return;
+  final enc = Uri.encodeComponent(item);
+
+  // Try Zomato app deep link first
+  final appUri = Uri.parse('zomato://search?keyword=$enc');
+  if (await canLaunchUrl(appUri)) {
+    await launchUrl(appUri, mode: LaunchMode.externalApplication);
+    return;
   }
 
+  // Fallback: web
+  await launchUrl(
+    Uri.parse('https://www.zomato.com/search?q=$enc'),
+    mode: LaunchMode.externalApplication,
+  );
+}
+   
+
+    
   Future<void> _handleWhatsApp(VaniIntent intent) async {
     final contact = intent.parameters['contact'] ?? '';
     final message = intent.parameters['message'] ?? '';
@@ -122,13 +161,33 @@ class ActionRouter {
     }
   }
 
-  Future<void> _handleAmazon(VaniIntent intent) async {
-    final item = intent.parameters['item'] ?? intent.parameters['query'] ?? '';
-    if (item.isEmpty) return;
-    final enc = Uri.encodeComponent(item);
-    await launchUrl(
-      Uri.parse('https://www.amazon.in/s?k=$enc'),
-      mode: LaunchMode.externalApplication,
-    );
+   Future<void> _handleAmazon(VaniIntent intent) async {
+  final item = intent.parameters['item'] ?? intent.parameters['query'] ?? '';
+  if (item.isEmpty) {
+    // Just open the Amazon app
+    final appUri = Uri.parse('com.amazon.mShop.android.shopping://');
+    if (await canLaunchUrl(appUri)) {
+      await launchUrl(appUri, mode: LaunchMode.externalApplication);
+      return;
+    }
+    await launchUrl(Uri.parse('https://www.amazon.in/'), mode: LaunchMode.externalApplication);
+    return;
   }
+  final enc = Uri.encodeComponent(item);
+
+  // Amazon India app deep link
+  final appUri = Uri.parse('amzn://www.amazon.in/s?k=$enc');
+  if (await canLaunchUrl(appUri)) {
+    await launchUrl(appUri, mode: LaunchMode.externalApplication);
+    return;
+  }
+
+  // Web fallback
+  await launchUrl(
+    Uri.parse('https://www.amazon.in/s?k=$enc'),
+    mode: LaunchMode.externalApplication,
+  );
+}
+   
+
 }

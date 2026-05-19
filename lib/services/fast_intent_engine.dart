@@ -3,6 +3,7 @@
 import '../models/vani_intent.dart';
 import 'intent_disambiguator.dart';
 import 'app_registry.dart';
+import 'app_deep_links.dart';
 
 
 class FastIntentEngine {
@@ -22,6 +23,13 @@ class FastIntentEngine {
     .replaceAll(RegExp(r'\bblinking\b'), 'blinkit')
     .replaceAll(RegExp(r'\blink\s*it\b'), 'blinkit')
     .replaceAll(RegExp(r'\bpink\s*it\b'), 'blinkit')
+    .replaceAll(RegExp(r'\bblanket\b'), 'blinkit')
+    .replaceAll(RegExp(r'\bblink\s+gate\b'), 'blinkit')
+    .replaceAll(RegExp(r'\bblinking\b'), 'blinkit')
+    .replaceAll(RegExp(r'\bblanket\b'), 'blinkit')
+    .replaceAll(RegExp(r'\bblink\s+gate\b'), 'blinkit')
+    .replaceAll(RegExp(r'\bblanking\b'), 'blinkit')
+    .replaceAll(RegExp(r'\blinkin\b'), 'blinkit')
     .replaceAll(RegExp(r'\bswigy\b'), 'swiggy')
     .replaceAll(RegExp(r'\bswiggi\b'), 'swiggy')
     .replaceAll(RegExp(r'\bzomatto\b'), 'zomato')
@@ -61,8 +69,10 @@ class FastIntentEngine {
       ?? _nearby(t)
       ?? _blinkit(t)
       ?? _swiggy(t)
+      ?? _amazon(t)    
       ?? _zomato(t)
       ?? _youtube(t)
+      ?? _searchInApp(t)  
       ?? _whatsapp(t)
       ?? _greeting(t);
 
@@ -183,6 +193,9 @@ class FastIntentEngine {
     else if (t.contains(' ka rasta'))      dest = t.split(' ka rasta').first.trim();
     else if (t.contains(' navigate'))      dest = t.split(' navigate').first.trim();
     else if (t.contains(' jaana hai'))     dest = t.split(' jaana hai').first.trim();
+    else if (t.contains(' jana hai'))      dest = t.split(' jana hai').first.trim();
+    else if (t.contains(' jaane'))         dest = t.split(' jaane').first.trim();
+    else if (t.contains(' jane'))          dest = t.split(' jane').first.trim();
     else if (t.startsWith('le chal '))     dest = _after(t, 'le chal ');
     else if (t.contains('direction to '))  dest = _after(t, 'direction to ');
 
@@ -256,6 +269,46 @@ class FastIntentEngine {
     );
   }
 
+
+   static VaniIntent? _amazon(String t) {
+  if (!t.contains('amazon')) return null;
+
+  String? item;
+
+  // Pattern 1: "amazon pe X dhundho" / "amazon par X dhundho"
+  final m1 = RegExp(r'amazon\s+(?:pe|par|me|mein)\s+(.+?)(?:\s+dhundho|\s+dikha|\s+search)?\s*$').firstMatch(t);
+  if (m1 != null) item = m1.group(1)?.trim();
+
+  // Pattern 2: "amazon pe X" (bare)
+  if (item == null) {
+    final m2 = RegExp(r'amazon\s+(?:pe|par|me|mein)\s+(.+?)\s*$').firstMatch(t);
+    if (m2 != null) item = m2.group(1)?.trim();
+  }
+
+  // Pattern 3: "X amazon" or "amazon X dhundho"
+  if (item == null) {
+    final m3 = RegExp(r'amazon\s+(.+?)\s+dhundho\s*$').firstMatch(t);
+    if (m3 != null) item = m3.group(1)?.trim();
+  }
+
+  // Pattern 4: just "amazon dhundho" — open Amazon, no specific item
+  if (item == null && (t.contains('amazon dhundho') || t == 'amazon')) {
+    item = ''; // empty query, just open Amazon
+  }
+
+  if (item == null) return null;
+
+  return _intent(
+    type:   IntentType.searchProduct,
+    app:    AppTarget.amazon,
+    params: {'item': item, 'query': item},
+    speak:  item.isEmpty ? 'Amazon khol raha hoon' : 'Amazon pe $item dhundh raha hoon',
+    action: 'amazon_search',
+  );
+}
+
+
+
   // ── Zomato ──────────────────────────────────────────────────────────────────
   static VaniIntent? _zomato(String t) {
     if (!t.contains('zomato')) return null;
@@ -281,7 +334,7 @@ class FastIntentEngine {
       .replaceAll(RegExp(r'\b(mere|mujhe|mujhko|hamare|humein|apke|aapke|tere)\s*(lie|liye|ke\s*lie|ke\s*liye)?\b'), ' ')
       .replaceAll(RegExp(r'\bke\s*(lie|liye)\b'), ' ')
       // Remove order verbs and intent markers
-      .replaceAll(RegExp(r'\b(order\s*karo|order\s*kar\s*do|mangao|mangwa\s*do|mangwana\s*hai|search\s*karo|dhundh\s*do|dhundo|chahiye|lao|dedo|de\s*do|add\s*karo|ka\s*order|ek)\b'), ' ')
+      .replaceAll(RegExp(r'\b(order\s*karo|order\s*kar\s*do|mangao|mangwa\s*do|mangwana\s*hai|search\s*karo|dhundho|dhundh\s*do|dhundo|dhundh|dhoondho|dhoond|chahiye|lao|dedo|de\s*do|add\s*karo|ka\s*order|ek)\b'), ' ')
       // Remove time/urgency fillers
       .replaceAll(RegExp(r'\b(abhi|jaldi|please|bhai|yaar|hai|hain|h)\b'), ' ')
       .trim();
@@ -314,6 +367,67 @@ class FastIntentEngine {
     );
   }
 
+         // ── Generic search across any installed app ──────────────────────────
+// Pattern: "<app> pe <query> dhundho/search/dikha/find"
+// Works for ALL apps in AppRegistry — looks up package, then looks up
+// deep-link template in AppDeepLinks.
+//
+// Falls back to app_launch (just open the app) for apps without
+// a known deep-link scheme.
+static VaniIntent? _searchInApp(String t) {
+  // Match: <app name> + (pe|par|me|mein) + <query> + optional verb
+  final m = RegExp(
+    r'^(.+?)\s+(?:pe|par|me|mein)\s+(.+?)'
+    r'(?:\s+dhundho|\s+dhundh|\s+dikha|\s+dikhao|\s+search\s+karo|\s+search|\s+find|\s+kholo|\s+khol)?\s*$'
+  ).firstMatch(t);
+
+  if (m == null) return null;
+
+  final appPhrase = m.group(1)?.trim() ?? '';
+  final query     = m.group(2)?.trim() ?? '';
+
+  if (appPhrase.isEmpty || query.isEmpty) return null;
+
+  // Try to resolve the spoken app name against the installed-apps registry
+  final app = AppRegistry.instance.findByName(appPhrase);
+  if (app == null) {
+    print('🔎 _searchInApp: no installed app matches "$appPhrase"');
+    return null;
+  }
+
+  // Look up known deep-link template
+  final uri = AppDeepLinks.searchUri(app.packageName, query);
+
+  if (uri != null) {
+    print('🔎 _searchInApp MATCHED with deep link: ${app.displayName} ← "$query"');
+    return _intent(
+      type:   IntentType.searchProduct,
+      app:    AppTarget.none,
+      params: {
+        'package': app.packageName,
+        'name':    app.displayName,
+        'query':   query,
+        'uri':     uri.toString(),
+      },
+      speak:  '${app.displayName} pe $query dhundh raha hoon',
+      action: 'app_search_deeplink',
+    );
+  }
+
+  // No deep-link known — fall back to just opening the app
+  print('🔎 _searchInApp: no deep link for ${app.displayName}, falling back to launch');
+  return _intent(
+    type:   IntentType.chat,
+    app:    AppTarget.none,
+    params: {
+      'package': app.packageName,
+      'name':    app.displayName,
+    },
+    speak:  '${app.displayName} khol raha hoon',
+    action: 'app_launch',
+  );
+}
+         
   // ── WhatsApp ────────────────────────────────────────────────────────────────
   static VaniIntent? _whatsapp(String t) {
     if (!t.contains('whatsapp') &&

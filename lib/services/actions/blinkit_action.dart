@@ -1,8 +1,13 @@
 // lib/services/actions/blinkit_action.dart
+//
+// Verified May 19, 2026:
+//   - Blinkit package: com.grofers.customerapp (legacy Grofers package, kept after rebrand)
+//   - Deep link scheme: grofers://search?q={query}
+//   - Handler: com.blinkit.intent.IntentReceiverActivity
+// ADB-verified: opens Blinkit natively with search query pre-filled.
 
 import 'package:url_launcher/url_launcher.dart';
 import 'package:logger/logger.dart';
-import '../permission_service.dart';
 
 class BlinkitAction {
   final _log = Logger();
@@ -11,35 +16,26 @@ class BlinkitAction {
     final query = quantity.isNotEmpty ? '$quantity $item' : item;
     _log.d('Blinkit search: $query');
 
-    // Method 1: Deep link
-    final deepLink = Uri.parse(
-      'in.blinkit.android://search?q=${Uri.encodeComponent(query)}'
-    );
-    if (await canLaunchUrl(deepLink)) {
-      await launchUrl(deepLink);
-      return true;
-    }
+    final enc = Uri.encodeComponent(query);
 
-    // Method 2: Accessibility Service
-    final installed = await PermissionService.instance
-      .isAppInstalled('com.blinkit.consumer');
-
-    if (installed) {
-      await PermissionService.instance
-        .setPendingAction('blinkit_search', query);
-
-      final appUri = Uri.parse('in.blinkit.android://');
+    // Verified app deep link
+    final appUri = Uri.parse('grofers://search?q=$enc');
+    try {
       if (await canLaunchUrl(appUri)) {
         await launchUrl(appUri, mode: LaunchMode.externalApplication);
+        _log.i('🛒 Blinkit opened natively with query: $query');
         return true;
       }
+    } catch (e) {
+      _log.w('Blinkit native launch failed: $e — falling back to web');
     }
 
-    // Method 3: Web fallback
+    // Web fallback — opens in browser if app not installed
     await launchUrl(
-      Uri.parse('https://blinkit.com/s/?q=${Uri.encodeComponent(query)}'),
+      Uri.parse('https://blinkit.com/s/?q=$enc'),
       mode: LaunchMode.externalApplication,
     );
+    _log.i('🛒 Blinkit fallback opened in browser with query: $query');
     return true;
   }
 }

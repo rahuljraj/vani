@@ -15,9 +15,10 @@ class AudioService {
   final _stt      = SpeechToText();
   final _log      = Logger();
 
-  bool   _isRecording = false;
-  bool   _sttReady    = false;
-  String _lastWords   = '';
+  bool   _isRecording      = false;
+  bool   _sttReady         = false;
+  String _lastWords        = '';
+  bool   _gotFinalResult   = false;
   void Function()? _autoStopCallback;
 
   bool   get isRecording => _isRecording;
@@ -35,6 +36,12 @@ class AudioService {
     if (_stt.isListening) {
       await _stt.cancel();
     }
+
+    // Clear callback BEFORE init — prevents stale callback firing
+    // during init's own 'done' status events from prior session
+    _autoStopCallback = null;
+    _lastWords = '';
+    _gotFinalResult = false;
 
     // Force re-initialization every time — speech_to_text on OnePlus
     // gets into a stuck state after first session if reused
@@ -55,20 +62,19 @@ class AudioService {
       return false;
     }
 
-    _lastWords = '';
-    _gotFinalResult = false;  
+    // NOW set the callback — after init is complete, so stray status
+    // events during init don't trigger the new callback
     _autoStopCallback = onAutoStop;
 
     await _stt.listen(
-        onResult: (result) {
-           _lastWords = result.recognizedWords;
-           _log.d('STT partial: "$_lastWords" final=${result.finalResult}');
-          if (result.finalResult) {
-            _gotFinalResult = true;
-               onResult(_lastWords);
-               }
-         },
-
+      onResult: (result) {
+        _lastWords = result.recognizedWords;
+        _log.d('STT partial: "$_lastWords" final=${result.finalResult}');
+        if (result.finalResult) {
+          _gotFinalResult = true;
+          onResult(_lastWords);
+        }
+      },
       localeId: 'en_IN',
       listenFor: const Duration(seconds: 15),
       pauseFor: const Duration(seconds: 4),
@@ -83,23 +89,40 @@ class AudioService {
     return true;
   }
 
-  // Tracks whether the latest STT result was marked final
-  bool _gotFinalResult = false;
+  /// Stop STT and return the final transcript.
+  /// Waits up to 1200ms for the final result to arrive after stop().
+  /// Returns empty string if no final result was received this session
+  /// (prevents stale text from triggering a duplicate command).
+  Future<String> stopSttListening() async {
+    await _stt.stop();
 
-Future<String> stopSttListening() async {
-  // Tell STT we're done capturing
-  await _stt.stop();
+    // Wait briefly for STT to deliver the final result.
+    // Google STT typically delivers final ~200-500ms after stop().
+    final deadline = DateTime.now().add(const Duration(milliseconds: 1200));
+    while (!_gotFinalResult && DateTime.now().isBefore(deadline)) {
+      await Future.delayed(const Duration(milliseconds: 50));
+    }
 
-  // Wait briefly for STT to deliver the final result.
-  // Google STT typically delivers final ~200-500ms after stop().
-  final deadline = DateTime.now().add(const Duration(milliseconds: 1200));
-  while (!_gotFinalResult && DateTime.now().isBefore(deadline)) {
-    await Future.delayed(const Duration(milliseconds: 50));
-  }
+    // Critical: clear callback so any 'done' status from cancel() in
+    // the next startSttListening doesn't fire stale processing
+    _autoStopCallback = null;
 
-  _log.d('STT stopped. Result: "$_lastWords" final=$_gotFinalResult');
-  _gotFinalResult = false; // reset for next session
-  return _lastWords;
+    // If we never got a final result, the text we have is stale
+    // (probably from a previous session). Return empty to prevent
+    // double-fire.
+    if (!_gotFinalResult) {
+      _log.d('STT stopped. No final result this session — returning empty (was: "$_lastWords")');
+      _lastWords = '';
+      return '';
+    }
+
+    final result = _lastWords;
+    _log.d('STT stopped. Result: "$result" final=true');
+
+    // Clear for next session
+    _lastWords = '';
+    _gotFinalResult = false;
+    return result;
   }
 
   // ── Raw recording (kept for future audio→Gemma) ──
