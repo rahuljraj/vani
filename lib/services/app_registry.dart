@@ -1,5 +1,6 @@
 import 'package:flutter/services.dart';
 import 'package:logger/logger.dart';
+import 'package:string_similarity/string_similarity.dart';
 
 class AppRegistry {
   static AppRegistry? _instance;
@@ -8,6 +9,11 @@ class AppRegistry {
 
   final _channel = const MethodChannel('com.vani/app_actions');
   final _log = Logger();
+
+  // Fuzzy match threshold (0.0 to 1.0). Higher = stricter.
+  // 0.7 catches: "cloud" → "claude" (~0.83), "creed" → "cred" (~0.80)
+  // 0.7 rejects: "swiggy" → "google" (~0.33)
+  static const double _fuzzyThreshold = 0.40;
 
   List<InstalledApp> _apps = [];
   bool _loaded = false;
@@ -30,31 +36,90 @@ class AppRegistry {
     }
   }
 
-  /// Finds an app by display name (fuzzy match) or exact package name.
+  /// Strips spaces, dots, dashes, underscores for normalized comparison.
+  /// "chat gpt" → "chatgpt", "confirm.tkt" → "confirmtkt"
+  static String _normalize(String s) {
+    return s.toLowerCase().replaceAll(RegExp(r'[\s._\-]+'), '');
+  }
+
+  /// Finds an app by display name with progressive matching strategies.
+  /// Stages: exact pkg → exact name → normalized name → substring → fuzzy
   InstalledApp? findByName(String query) {
     final q = query.toLowerCase().trim();
     if (q.isEmpty) return null;
 
-    // Try exact package name first
+    // STAGE 1: Exact package name
     for (final app in _apps) {
-      if (app.packageName.toLowerCase() == q) return app;
+      if (app.packageName.toLowerCase() == q) {
+        _log.d('🎯 findByName exact-pkg: "$q" → ${app.displayName}');
+        return app;
+      }
     }
 
-    // Then exact display name
+    // STAGE 2: Exact display name
     for (final app in _apps) {
-      if (app.displayName.toLowerCase() == q) return app;
+      if (app.displayName.toLowerCase() == q) {
+        _log.d('🎯 findByName exact-name: "$q" → ${app.displayName}');
+        return app;
+      }
     }
 
-    // Then substring match on display name
+    // STAGE 3: Normalized match (strips spaces/dots/dashes)
+    // Catches: "chat gpt" → "chatgpt", "confirm tkt" → "confirmtkt"
+    final qNorm = _normalize(q);
     for (final app in _apps) {
-      if (app.displayName.toLowerCase().contains(q)) return app;
+      if (_normalize(app.displayName) == qNorm) {
+        _log.d('🎯 findByName normalized: "$q" → ${app.displayName}');
+        return app;
+      }
     }
 
-    // Then substring match on package name
+    // STAGE 4: Substring on display name
     for (final app in _apps) {
-      if (app.packageName.toLowerCase().contains(q)) return app;
+      if (app.displayName.toLowerCase().contains(q)) {
+        _log.d('🎯 findByName substring-name: "$q" → ${app.displayName}');
+        return app;
+      }
     }
 
+    // STAGE 5: Substring on package name
+    for (final app in _apps) {
+      if (app.packageName.toLowerCase().contains(q)) {
+        _log.d('🎯 findByName substring-pkg: "$q" → ${app.displayName}');
+        return app;
+      }
+    }
+
+    // STAGE 6: Fuzzy match (Dice's coefficient via string_similarity)
+    // Catches phonetic STT errors like "cloud" → "Claude" (~0.44)
+    final scored = <MapEntry<InstalledApp, double>>[];
+    for (final app in _apps) {
+      final score = q.similarityTo(app.displayName.toLowerCase());
+      if (score >= _fuzzyThreshold) {
+        scored.add(MapEntry(app, score));
+      }
+    }
+    
+    // Sort by score descending, take the best
+    scored.sort((a, b) => b.value.compareTo(a.value));
+    
+    // Diagnostic: log top 3 candidates regardless of match
+    final top3 = _apps
+      .map((a) => MapEntry(a, q.similarityTo(a.displayName.toLowerCase())))
+      .toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    _log.i('🔎 Top 3 fuzzy candidates for "$q": '
+           '${top3.take(3).map((e) => '${e.key.displayName}=${e.value.toStringAsFixed(2)}').join(", ")}');
+
+    if (scored.isNotEmpty) {
+      final best = scored.first;
+      _log.i('🔎 findByName FUZZY: "$q" → ${best.key.displayName} '
+             '(score: ${best.value.toStringAsFixed(2)})');
+      return best.key;
+    }
+
+      
+    _log.w('❌ findByName: no match for "$q" (tried ${_apps.length} apps)');
     return null;
   }
 
