@@ -140,7 +140,7 @@ class FastIntentEngine {
     if (openMatch != null) {
       final candidate = openMatch.group(1)?.trim() ?? '';
       // Reject if it's just a filler word
-      if (!RegExp(r'^(karo|kar\s*do|please|abhi|jaldi)$').hasMatch(candidate)) {
+      if (!RegExp(r'^(karo|kar\s*do|please|abhi|jaldi|app|application)$').hasMatch(candidate)) {
         appName = candidate;
       }
     }
@@ -155,8 +155,10 @@ class FastIntentEngine {
   if (appName == null || appName.isEmpty) return null;
 
   // Strip filler words from extracted name
+  // 'application' / 'app' / 'wala' / 'wali' often follow app name in spoken Hinglish
   appName = appName
-    .replaceAll(RegExp(r'\b(please|abhi|jaldi)\b'), '')
+    .replaceAll(RegExp(r'\b(application|app|please|abhi|jaldi|wala|wali|ek)\b'), '')
+    .replaceAll(RegExp(r'\s+'), ' ')   // collapse multiple spaces
     .trim();
 
   if (appName.isEmpty) return null;
