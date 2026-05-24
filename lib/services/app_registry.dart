@@ -74,24 +74,36 @@ class AppRegistry {
       }
     }
 
-    // STAGE 4: Substring on display name
-    for (final app in _apps) {
-      if (app.displayName.toLowerCase().contains(q)) {
-        _log.d('🎯 findByName substring-name: "$q" → ${app.displayName}');
-        return app;
+   // STAGES 4-5: Substring matches (display name, then package name)
+    // GUARD: skip for queries ≤3 chars to prevent "gp" matching "ChatGPT"
+    if (q.length >= 4) {
+      // STAGE 4: Substring on display name
+      for (final app in _apps) {
+        if (app.displayName.toLowerCase().contains(q)) {
+          _log.d('🎯 findByName substring-name: "$q" → ${app.displayName}');
+          return app;
+        }
       }
-    }
 
-    // STAGE 5: Substring on package name
-    for (final app in _apps) {
-      if (app.packageName.toLowerCase().contains(q)) {
-        _log.d('🎯 findByName substring-pkg: "$q" → ${app.displayName}');
-        return app;
+      // STAGE 5: Substring on package name
+      for (final app in _apps) {
+        if (app.packageName.toLowerCase().contains(q)) {
+          _log.d('🎯 findByName substring-pkg: "$q" → ${app.displayName}');
+          return app;
+        }
       }
     }
 
     // STAGE 6: Fuzzy match (Dice's coefficient via string_similarity)
     // Catches phonetic STT errors like "cloud" → "Claude" (~0.44)
+    // GUARD: queries ≤3 chars are too ambiguous for fuzzy matching
+    // (e.g. "gp" would fuzzy-match "ChatGPT" with high false-positive rate)
+    if (q.length < 4) {
+      _log.w('❌ findByName: no match for "$q" '
+             '(query too short for fuzzy, tried ${_apps.length} apps exactly)');
+      return null;
+    }
+    
     final scored = <MapEntry<InstalledApp, double>>[];
     for (final app in _apps) {
       final score = q.similarityTo(app.displayName.toLowerCase());
