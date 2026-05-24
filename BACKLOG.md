@@ -20,3 +20,12 @@
 - More STT normalization (Spotify variants, Flipkart variants)
 - Multi-turn dialogue
 - Andrej Wiki SQLite layer
+
+## v0.2.3+ — STT phonetic edge cases (May 23, 11:10 PM)
+
+Discovered after v0.2.2 ships:
+- Severe mishears unreachable by Dice (lord?Claude scores 0.15)
+- Short queries cause false positives (gp?ChatGPT)  
+- Near-identical app names collide (Google Pay?Google Play)
+
+Combined fix in v0.3: min-length guard + best-match-across-stages + Soundex fallback.
