@@ -1,3 +1,5 @@
+
+import 'app_registry.dart';
 class IntentDisambiguator {
   // Brand → strongly associated context words
   static const _contextWords = <String, List<String>>{
@@ -53,10 +55,22 @@ class IntentDisambiguator {
   /// Returns the best-matching app for ambiguous input, or null if truly unclear.
   static String? resolve(String transcript) {
     final t = transcript.toLowerCase();
-
+    final tNorm = t.replaceAll(RegExp(r'[\s._\-]+'), '');
+    
+    // GUARD: If any installed app's name appears in the transcript (with
+    // or without spaces), skip disambiguation and let _openApp's exact/
+    // fuzzy matching handle it. Prevents "chat gpt" → WhatsApp routing.
+    for (final app in AppRegistry.instance.apps) {
+      final name = app.displayName.toLowerCase();
+      final nameNorm = name.replaceAll(RegExp(r'[\s._\-]+'), '');
+      if (name.length >= 4 && 
+          (t.contains(name) || tNorm.contains(nameNorm))) {
+        return null;  // _openApp handles it via exact/fuzzy
+      }
+    }
+    
     // Score each candidate app
     final scores = <String, int>{};
-
     for (final app in _contextWords.keys) {
       var score = 0;
 
