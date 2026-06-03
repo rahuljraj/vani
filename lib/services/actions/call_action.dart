@@ -2,46 +2,40 @@
 
 import 'package:url_launcher/url_launcher.dart';
 import 'package:logger/logger.dart';
+import '../contacts_service.dart';
 
 class CallAction {
   final _log = Logger();
 
-  /// If [contactOrNumber] is a digit string → dial directly.
-  /// Otherwise → open dialer with name pre-filled (user taps to call).
+  /// Digits → dial directly. Name → resolve via contacts, then pre-fill dialer.
+  /// (Pre-fills only; user taps call. Auto-call = v1.1 + CALL_PHONE perm.)
   Future<bool> dial(String contactOrNumber) async {
     final clean = contactOrNumber.trim();
-    if (clean.isEmpty) {
-      // Open empty dialer
-      final uri = Uri.parse('tel:');
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri);
-        return true;
-      }
-      return false;
+    if (clean.isEmpty) return _openDialer(null);
+
+    // Pure digits/symbols → dial directly.
+    if (RegExp(r'^[\d+\-\s]+$').hasMatch(clean)) {
+      return _openDialer(clean.replaceAll(RegExp(r'\s'), ''));
     }
 
-    // Pure digits/+ → tel: URI
-    final digitsOnly = RegExp(r'^[\d+\-\s]+$').hasMatch(clean);
-    if (digitsOnly) {
-      final uri = Uri.parse('tel:${clean.replaceAll(RegExp(r'\s'), '')}');
-      _log.d('Call dial: $uri');
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri);
-        return true;
-      }
+    // Name → resolve against on-device contacts.
+    final number = await ContactsService.instance.resolveNumber(clean);
+    if (number != null && number.isNotEmpty) {
+      _log.d('Call: resolved "$clean" → $number');
+      return _openDialer(number);
     }
 
-    // Name → open contacts search
-    final uri = Uri.parse(
-      'content://com.android.contacts/contacts/lookup/${Uri.encodeComponent(clean)}',
-    );
+    // No match → open empty dialer (graceful; replaces the old broken lookup URI).
+    _log.w('Call: no contact match for "$clean" — opening dialer');
+    return _openDialer(null);
+  }
+
+  Future<bool> _openDialer(String? number) async {
+    final uri = Uri.parse(number == null ? 'tel:' : 'tel:$number');
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri);
       return true;
     }
-
-    // Final fallback — open dialer
-    await launchUrl(Uri.parse('tel:'));
-    return true;
+    return false;
   }
 }

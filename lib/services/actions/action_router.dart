@@ -21,6 +21,33 @@ class ActionRouter {
   final _whatsapp = WhatsAppAction();
   final _call     = CallAction();
  
+ /// Rejects placeholder/junk contacts (e.g. Gemma's "your_phone_number",
+  /// "contact_name") so we never dial or message a non-real target.
+  /// Returns a usable contact, or '' if it isn't real.
+  String _sanitizeContact(String raw) {
+    final c = raw.trim();
+    if (c.isEmpty) return '';
+    final lower = c.toLowerCase();
+
+    // Schema placeholders almost always contain underscores or filler tokens.
+    if (lower.contains('_')) return '';
+    const placeholders = {
+      'your phone number', 'phone number', 'phone', 'number', 'your number',
+      'mobile number', 'contact', 'contact name', 'recipient',
+      'recipient name', 'name', 'xxx', 'xxxx', 'xxxxx', 'unknown', 'null',
+    };
+    if (placeholders.contains(lower)) return '';
+
+    // Looks numeric → must be a real phone (≥10 digits for an Indian mobile).
+    final isNumeric = RegExp(r'^[0-9+\-\s()]+$').hasMatch(c);
+    if (isNumeric) {
+      final digits = c.replaceAll(RegExp(r'[^0-9]'), '');
+      return digits.length >= 10 ? c : '';
+    }
+
+    // Otherwise treat as a real contact name.
+    return c;
+  }
 
   Future<void> execute(VaniIntent intent) async {
     _log.d('Routing: ${intent.type} → ${intent.app} action=${intent.actionCode}');
@@ -30,7 +57,7 @@ class ActionRouter {
 
     // Action-code-first routing (handles phone_dial which has no app)
     if (intent.actionCode == 'phone_dial') {
-      await _call.dial(intent.parameters['contact'] ?? '');
+      await _call.dial(_sanitizeContact(intent.parameters['contact'] ?? ''));
       return;
     }
      if (intent.actionCode == 'app_launch') {
@@ -136,8 +163,8 @@ if (intent.actionCode == 'app_search_deeplink') {
    
 
     
-  Future<void> _handleWhatsApp(VaniIntent intent) async {
-    final contact = intent.parameters['contact'] ?? '';
+ Future<void> _handleWhatsApp(VaniIntent intent) async {
+    final contact = _sanitizeContact(intent.parameters['contact'] ?? '');
     final message = intent.parameters['message'] ?? '';
     if (message.isNotEmpty && contact.isNotEmpty) {
       await _whatsapp.sendMessage(contact, message);

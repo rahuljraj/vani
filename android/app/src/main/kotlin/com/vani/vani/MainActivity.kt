@@ -5,6 +5,7 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import android.content.Intent
 import android.provider.Settings
+import android.provider.ContactsContract
 
 class MainActivity : FlutterActivity() {
 
@@ -39,21 +40,54 @@ class MainActivity : FlutterActivity() {
                     result.success(isPackageInstalled(packageName))
                 }
                 "getInstalledApps" -> {
-                 result.success(InstalledAppsScanner.scan(this))
+                    result.success(InstalledAppsScanner.scan(this))
                 }
                 "launchApp" -> {
-                val packageName = call.argument<String>("packageName") ?: ""
-                val intent = packageManager.getLaunchIntentForPackage(packageName)
-                 if (intent != null) {
-                  startActivity(intent)
-                  result.success(true)
-                 } else {
-                  result.success(false)
-                 }
+                    val packageName = call.argument<String>("packageName") ?: ""
+                    val intent = packageManager.getLaunchIntentForPackage(packageName)
+                    if (intent != null) {
+                        startActivity(intent)
+                        result.success(true)
+                    } else {
+                        result.success(false)
+                    }
+                }
+                "getContacts" -> {
+                    result.success(getContacts())
                 }
                 else -> result.notImplemented()
             }
         }
+    }
+
+    private fun getContacts(): List<Map<String, String>> {
+        val contacts = mutableListOf<Map<String, String>>()
+        try {
+            val cursor = contentResolver.query(
+                ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                arrayOf(
+                    ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+                    ContactsContract.CommonDataKinds.Phone.NUMBER
+                ),
+                null, null, null
+            )
+            cursor?.use {
+                val nameIdx = it.getColumnIndex(
+                    ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
+                val numIdx = it.getColumnIndex(
+                    ContactsContract.CommonDataKinds.Phone.NUMBER)
+                while (it.moveToNext()) {
+                    val name = if (nameIdx >= 0) it.getString(nameIdx) ?: "" else ""
+                    val number = if (numIdx >= 0) it.getString(numIdx) ?: "" else ""
+                    if (name.isNotEmpty() && number.isNotEmpty()) {
+                        contacts.add(mapOf("name" to name, "number" to number))
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            // Permission not granted or query failed → return empty list.
+        }
+        return contacts
     }
 
     private fun isAccessibilityServiceEnabled(): Boolean {
