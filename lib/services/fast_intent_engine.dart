@@ -76,13 +76,36 @@ class FastIntentEngine {
       ?? _whatsapp(t)
       ?? _greeting(t);
 
-  if (result == null) {
-    print('🔍 No FastIntent match for: "$t" — falling through to Gemma');
-  } else {
+  if (result != null) {
     print('🔍 FastIntent matched: ${result.actionCode}');
+    return result;
   }
 
-  return result;
+  // Grocery command → offer the INSTALLED grocery apps (Blinkit/Zepto/BigBasket).
+  // Keeps grocery out of Swiggy's food search, and adapts to what the user has.
+  if (IntentDisambiguator.isGroceryCommand(t)) {
+    final grocers = IntentDisambiguator.installedGroceryApps();
+    if (grocers.length >= 2) {
+      print('🎯 Grocery choice: ${grocers.map((e) => e.value).join(", ")}');
+      return _groceryDisambiguate(t, grocers);
+    }
+    if (grocers.length == 1) {
+      print('🛒 Single grocery app installed → ${grocers.first.value}');
+      return _grocerySearch(t, grocers.first.key, grocers.first.value);
+    }
+    // none installed → fall through to normal matching (likely Blinkit by name)
+  }
+
+  // No direct match. Before falling to Gemma, check for an ambiguous app tie
+  // (e.g. "biryani mangwa do" → Swiggy vs Zomato) and ASK rather than guess.
+  final candidates = IntentDisambiguator.disambiguationCandidates(t);
+  if (candidates.length >= 2) {
+    print('🎯 Disambiguation needed: ${candidates.join(", ")}');
+    return _disambiguate(t, candidates);
+  }
+
+  print('🔍 No FastIntent match for: "$t" — falling through to Gemma');
+  return null;
 }
 
   // ── Call ────────────────────────────────────────────────────────────────────
@@ -518,6 +541,73 @@ static VaniIntent? _searchInApp(String t) {
         .replaceAll(RegExp(r'\s{2,}'), ' ')
         .trim();
     return out.isEmpty ? null : out;
+  }
+   
+   // ── Disambiguation ────────────────────────────────────────────────────────
+  /// Ask-the-user intent when scoring ties between apps.
+  static VaniIntent _disambiguate(String t, List<String> candidates) {
+    final item = _pendingItem(t);
+    final pretty = candidates
+        .map((c) => c.isEmpty ? c : c[0].toUpperCase() + c.substring(1))
+        .join(' ya ');
+    return _intent(
+      type:   IntentType.orderFood,
+      app:    AppTarget.none,
+      params: {
+        'candidates': candidates.join(','),
+        if (item.isNotEmpty) 'item': item,
+      },
+      speak:  item.isNotEmpty ? '$item kahaan se? $pretty?'
+                              : 'Kahaan se order karun? $pretty?',
+      action: 'disambiguate',
+    );
+  }
+
+  /// Recover the bare item from a command with no app name ("biryani mangwa do").
+  static String _pendingItem(String t) {
+    var item = t
+      .replaceAll(RegExp(r'\b(order\s*karo|order\s*kar\s*do|mangao|mangwa\s*do|mangwana\s*hai|search\s*karo|dhundho|dhundh\s*do|dhundo|dhundh|chahiye|lao|dedo|de\s*do|ka\s*order|ek)\b'), ' ')
+      .replaceAll(RegExp(r'\b(abhi|jaldi|please|bhai|yaar|hai|hain|h|mujhe|mere|lie|liye)\b'), ' ')
+      .trim();
+    return _clean(item) ?? '';
+  }
+
+  /// Ask which grocery app, carrying package names so the UI can re-dispatch.
+  static VaniIntent _groceryDisambiguate(
+      String t, List<MapEntry<String, String>> grocers) {
+    final item = _pendingItem(t);
+    final pretty = grocers.map((e) => e.value).join(' ya ');
+    return _intent(
+      type:   IntentType.orderFood,
+      app:    AppTarget.none,
+      params: {
+        // candidates = display names; pkgs = matching package names (CSV, aligned)
+        'candidates': grocers.map((e) => e.value).join(','),
+        'pkgs':       grocers.map((e) => e.key).join(','),
+        if (item.isNotEmpty) 'item': item,
+        'kind': 'grocery',
+      },
+      speak:  item.isNotEmpty ? '$item kahaan se? $pretty?'
+                              : 'Grocery kahaan se? $pretty?',
+      action: 'disambiguate',
+    );
+  }
+
+  /// Direct grocery search when exactly one grocery app is installed.
+  static VaniIntent _grocerySearch(String t, String pkg, String name) {
+    final item = _pendingItem(t);
+    return _intent(
+      type:   IntentType.orderFood,
+      app:    AppTarget.none,
+      params: {
+        'package': pkg,
+        'name':    name,
+        if (item.isNotEmpty) 'query': item,
+      },
+      speak:  item.isNotEmpty ? '$name pe $item dhundh raha hoon'
+                              : '$name khol raha hoon',
+      action: 'app_search_deeplink',
+    );
   }
 
   static String? _extractQty(String text) {

@@ -7,6 +7,8 @@ import '../services/tts_service.dart';
 import '../services/gemma_service.dart';
 import '../services/permission_service.dart';
 import '../services/actions/action_router.dart';
+import '../models/vani_intent.dart';
+import '../services/app_deep_links.dart';
 
 enum VaniState { idle, listening, thinking, speaking, error }
 
@@ -32,6 +34,7 @@ class _HomeScreenState extends State<HomeScreen>
   bool      _isDownloading    = false;
   double    _downloadProgress = 0.0;
   String    _loadingStep      = '';
+  VaniIntent? _pendingChoice;   // set when VANI needs the user to pick an app
 
   late AnimationController _pulseCtrl;
   late Animation<double>   _pulseAnim;
@@ -212,14 +215,26 @@ class _HomeScreenState extends State<HomeScreen>
     _textCtrl.clear();
 
     setState(() {
-      _state      = VaniState.thinking;
-      _transcript = text;
-      _response   = '';
+      _state         = VaniState.thinking;
+      _transcript    = text;
+      _response      = '';
+      _pendingChoice = null;   // dismiss any stale choice on a new command
     });
 
     final intent = await GemmaService.instance.process(text);
 
     if (!mounted) return;
+
+    // VANI needs the user to pick an app → show buttons, don't act yet.
+    if (intent.actionCode == 'disambiguate') {
+      setState(() {
+        _state         = VaniState.idle;
+        _response      = intent.speakText;
+        _pendingChoice = intent;
+      });
+      await TtsService.instance.speak(intent.speakText);
+      return;
+    }
 
     setState(() {
       _state    = VaniState.speaking;
@@ -229,6 +244,71 @@ class _HomeScreenState extends State<HomeScreen>
     await _router.execute(intent);
 
     if (mounted) setState(() => _state = VaniState.idle);
+  }
+
+ void _onChoice(String label) {
+    final intent = _pendingChoice;
+    final item = intent?.parameters['item'] ?? '';
+    setState(() => _pendingChoice = null);
+
+    // Grocery choices carry aligned package names → search by package directly,
+    // since "zepto pe doodh" has no dedicated matcher (only _blinkit does).
+    if (intent?.parameters['kind'] == 'grocery') {
+      final names = (intent?.parameters['candidates'] ?? '').split(',');
+      final pkgs  = (intent?.parameters['pkgs'] ?? '').split(',');
+      final i = names.indexOf(label);
+      if (i >= 0 && i < pkgs.length) {
+        final uri = AppDeepLinks.searchUri(pkgs[i], item);
+        _router.execute(VaniIntent(
+          type: IntentType.orderFood,
+          app: AppTarget.none,
+          parameters: {
+            'package': pkgs[i],
+            'name': label,
+            if (item.isNotEmpty) 'query': item,
+            if (uri != null) 'uri': uri.toString(),
+          },
+          speakText: item.isEmpty ? '$label khol raha hoon'
+                                  : '$label pe $item dhundh raha hoon',
+          actionCode: 'app_search_deeplink',
+        ));
+        return;
+      }
+    }
+
+    // Food/other choices → re-dispatch as text through the engine.
+    processText(item.isEmpty ? label : '$label pe $item');
+  }
+
+  Widget _buildChoices() {
+    final intent = _pendingChoice;
+    if (intent == null) return const SizedBox.shrink();
+    final candidates = (intent.parameters['candidates'] ?? '')
+        .split(',')
+        .where((c) => c.isNotEmpty)
+        .toList();
+    if (candidates.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(32, 12, 32, 0),
+      child: Wrap(
+        spacing: 12,
+        runSpacing: 12,
+        alignment: WrapAlignment.center,
+        children: candidates.map((c) {
+          final label = c[0].toUpperCase() + c.substring(1);
+          return ElevatedButton(
+            onPressed: () => _onChoice(c),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: VaniColors.surfaceLight,
+              foregroundColor: VaniColors.primary,
+              side: const BorderSide(color: VaniColors.accent),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            ),
+            child: Text(label, style: const TextStyle(fontSize: 16)),
+          );
+        }).toList(),
+      ),
+    );
   }
 
   Color get _buttonColor {
@@ -278,6 +358,7 @@ class _HomeScreenState extends State<HomeScreen>
             const Spacer(),
             _buildTranscript(),
             _buildResponse(),
+             _buildChoices(),
             const Spacer(),
             _buildMicButton(),
             const SizedBox(height: 12),
