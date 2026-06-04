@@ -60,6 +60,24 @@ User: "Airport jaana hai"
 
 User: "Blinkit pe 2kg sugar"
 {"intent":"order_food","app":"blinkit","parameters":{"item":"sugar","quantity":"2kg"},"speak":"Blinkit pe sugar add kar raha hoon","action":"blinkit_search"}
+
+User: "Pizza order karo"
+{"intent":"order_food","app":"swiggy","parameters":{"item":"pizza"},"speak":"Swiggy pe pizza dhundh raha hoon","action":"swiggy_search"}
+
+User: "Biryani mangwa do"
+{"intent":"order_food","app":"swiggy","parameters":{"item":"biryani"},"speak":"Swiggy pe biryani dhundh raha hoon","action":"swiggy_search"}
+
+User: "Doodh mangwa do"
+{"intent":"order_food","app":"blinkit","parameters":{"item":"doodh"},"speak":"Blinkit pe doodh dhundh raha hoon","action":"blinkit_search"}
+
+User: "Mummy ko message karo"
+{"intent":"send_message","app":"whatsapp","parameters":{"contact":"mummy"},"speak":"Mummy ko message kar raha hoon","action":"whatsapp_open"}
+
+IMPORTANT:
+- "order karo" / "mangwa do" / "mangao" = ordering FOOD or GROCERY, never send_message.
+- Cooked food (pizza, biryani, burger) without an app → swiggy.
+- Grocery (doodh, atta, sabzi, sugar) without an app → blinkit.
+- Only use send_message/whatsapp when the user clearly says message/msg/bhejo/WhatsApp.
 ''';
 
   static const String _sdCardModelPath    = '/sdcard/Download/gemma_model.task';

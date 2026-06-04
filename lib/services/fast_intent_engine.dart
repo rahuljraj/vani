@@ -455,30 +455,50 @@ static VaniIntent? _searchInApp(String t) {
          
   // ── WhatsApp ────────────────────────────────────────────────────────────────
   static VaniIntent? _whatsapp(String t) {
-    if (!t.contains('whatsapp') &&
-        !t.contains('message karo') &&
-        !t.contains('msg karo')) return null;
+    final hasWa = t.contains('whatsapp') ||
+                  t.contains('message karo') || t.contains('msg karo') ||
+                  t.contains('message bhej')  || t.contains('msg bhej');
+    if (!hasWa) return null;
 
-    var contact = t
-        .replaceAll(RegExp(r'(ko\s+)?whatsapp(\s+karo)?'), '')
-        .replaceAll(RegExp(r'(ko\s+)?(message|msg)\s+karo'), '')
-        .replaceAll(RegExp(r'whatsapp\s*(pe|par)?'), '')
-        .replaceAll(' ko ', ' ')
-        .trim();
+    String contact = '';
+    String message = '';
 
-    contact = _clean(contact) ?? '';
+    // "<contact> ko <verb> <message>"  — message is everything after the verb.
+    final m = RegExp(
+      r'^(.+?)\s+ko\s+(?:whatsapp|message|msg)\s*'
+      r'(?:karo|kar\s*do|bhej\s*do|bhejo)?\s*(.*)$',
+    ).firstMatch(t);
+
+    if (m != null) {
+      contact = (m.group(1) ?? '').trim();
+      message = (m.group(2) ?? '').trim();
+    } else {
+      // No "ko" structure — strip keywords, treat remainder as contact.
+      contact = t
+          .replaceAll(RegExp(r'(ko\s+)?whatsapp(\s+karo)?'), '')
+          .replaceAll(RegExp(r'(ko\s+)?(message|msg)\s+karo'), '')
+          .replaceAll(RegExp(r'whatsapp\s*(pe|par)?'), '')
+          .replaceAll(' ko ', ' ')
+          .trim();
+    }
+
+    contact = _clean(contact) ?? '';   // clean the name; leave message untouched
 
     return _intent(
       type:   IntentType.sendMessage,
       app:    AppTarget.whatsapp,
-      params: {'contact': contact},
-      speak:  contact.isNotEmpty
-                ? '$contact ka WhatsApp khol raha hoon'
-                : 'WhatsApp khol raha hoon',
+      params: {
+        'contact': contact,
+        if (message.isNotEmpty) 'message': message,
+      },
+      speak:  message.isNotEmpty
+                ? (contact.isNotEmpty ? '$contact ko message likh raha hoon'
+                                      : 'Message likh raha hoon')
+                : (contact.isNotEmpty ? '$contact ka WhatsApp khol raha hoon'
+                                      : 'WhatsApp khol raha hoon'),
       action: 'whatsapp_open',
     );
   }
-
   // ── Greetings ───────────────────────────────────────────────────────────────
   static const _greetMap = <String, String>{
     'hello':        'Hello! Kya madad kar sakta hoon?',
