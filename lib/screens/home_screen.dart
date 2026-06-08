@@ -20,7 +20,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
 
   final _router   = ActionRouter();
   final _textCtrl = TextEditingController();
@@ -29,6 +29,7 @@ class _HomeScreenState extends State<HomeScreen>
   String    _transcript       = '';
   String    _response         = '';
   bool      _modelReady       = false;
+  bool      _autoListened     = false;   // QS tile launch started the mic
   bool      _modelError       = false;
   String    _modelErrorReason = '';
   bool      _isDownloading    = false;
@@ -41,11 +42,29 @@ class _HomeScreenState extends State<HomeScreen>
   late AnimationController _glowCtrl;
   late Animation<double>   _glowAnim;
 
-  @override
+ @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _setupAnimations();
     _initModel();
+    _checkAutoListen();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Warm tile-tap: app resumes with the native flag already set.
+    if (state == AppLifecycleState.resumed) _checkAutoListen();
+  }
+
+  /// Opened via the Quick Settings tile → jump straight to listening.
+  /// Native sets a one-shot flag; we consume it here.
+  Future<void> _checkAutoListen() async {
+    final pending = await PermissionService.instance.consumeAutoListen();
+    if (!pending || !mounted) return;
+    if (_state == VaniState.listening || _state == VaniState.thinking) return;
+    _autoListened = true;                // suppress the model-ready greeting
+    _startListening();                   // mic on now — no wait for Gemma
   }
 
   void _setupAnimations() {
@@ -154,7 +173,10 @@ class _HomeScreenState extends State<HomeScreen>
         _modelErrorReason = '';
         _loadingStep      = '';
       });
-      await TtsService.instance.speak('VANI ready hai. Bataiye kya karein?');
+      // Don't greet over a tile-launched listening/command session.
+      if (!_autoListened && _state == VaniState.idle) {
+        await TtsService.instance.speak('VANI ready hai. Bataiye kya karein?');
+      }
     }
   }
 
@@ -166,10 +188,10 @@ class _HomeScreenState extends State<HomeScreen>
   // ── Recording ───────────────────────────────────
   Future<void> _startListening() async {
   if (_state == VaniState.thinking) return;
-  if (!_modelReady) {
-    await TtsService.instance.speak('Ek second, AI load ho rahi hai');
-    return;
-  }
+  // Intentionally NOT gated on _modelReady: STT (online) + FastIntentEngine
+  // handle ~90% of commands with no model. If a command falls through to
+  // Gemma before it's loaded, GemmaService.process() returns a graceful
+  // "AI load ho rahi hai" reply — no crash, no hang.
   await TtsService.instance.stop();
 
   final ok = await AudioService.instance.startSttListening(
@@ -321,6 +343,16 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   String get _statusText {
+    // An active voice interaction always wins — even while Gemma loads
+    // in the background after a tile launch.
+    switch (_state) {
+      case VaniState.listening: return VaniStrings.listening;
+      case VaniState.thinking:  return VaniStrings.thinking;
+      case VaniState.speaking:  return VaniStrings.speaking;
+      case VaniState.idle:
+      case VaniState.error:
+        break;
+    }
     if (_isDownloading) {
       final pct = (_downloadProgress * 100).toStringAsFixed(0);
       final label = _loadingStep.isNotEmpty
@@ -330,17 +362,12 @@ class _HomeScreenState extends State<HomeScreen>
     }
     if (_modelError) return 'Error — Retry karein';
     if (_loadingStep.isNotEmpty) return _loadingStep;
-    switch (_state) {
-      case VaniState.listening: return VaniStrings.listening;
-      case VaniState.thinking:  return VaniStrings.thinking;
-      case VaniState.speaking:  return VaniStrings.speaking;
-      default:
-        return _modelReady ? VaniStrings.holdToSpeak : VaniStrings.modelLoading;
-    }
+    return _modelReady ? VaniStrings.holdToSpeak : VaniStrings.modelLoading;
   }
 
-  @override
+ @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _pulseCtrl.dispose();
     _glowCtrl.dispose();
     _textCtrl.dispose();
@@ -386,7 +413,7 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ),
             ],
-            if (_isDownloading) ...[
+             if (_isDownloading && _state == VaniState.idle) ...[
               const SizedBox(height: 4),
               const Text(
                 'Sirf pehli baar — 557 MB',

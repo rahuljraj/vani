@@ -22,10 +22,10 @@ class IntentDisambiguator {
       'restaurant', 'meal', 'dinner', 'lunch', 'breakfast',
       'burger', 'roll', 'dosa', 'thali', 'bhaji', 'samosa', 'chaat',
     ],
-    'zomato': [
-      'biryani', 'pizza', 'restaurant', 'dine', 'food', 'khana',
-      'menu', 'thali', 'bhaji',
-    ],
+    // 'zomato' deferred to v1.1 — its in-app search deep link is unverified
+    // (opens the app but never pre-fills search). Removed from scoring so it's
+    // never offered as a disambiguation option. Food → Swiggy for v1.0.
+    
     'linkedin': [
       'job', 'jobs', 'naukri', 'profile', 'resume', 'cv',
       'connection', 'hiring', 'post', 'recruiter', 'company',
@@ -88,8 +88,18 @@ class IntentDisambiguator {
     final top = sorted.first;
     if (_appCategory[top.key] != 'grocery') return false;
     // Clear grocery winner (or only grocery scored).
+    // Clear grocery winner (or only grocery scored).
     if (sorted.length == 1) return true;
     return top.value - sorted[1].value >= 2;
+  }
+
+  /// True when the command points at food (a food app is the top scorer).
+  /// With Zomato removed from scoring, Swiggy is the food signal for v1.0,
+  /// so food-with-no-app-named routes straight to Swiggy.
+  static bool isFoodCommand(String transcript) {
+    final sorted = _scores(transcript.toLowerCase());
+    if (sorted.isEmpty) return false;
+    return _appCategory[sorted.first.key] == 'food';
   }
    
 

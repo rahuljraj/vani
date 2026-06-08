@@ -4,6 +4,7 @@ import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import android.content.Intent
+import android.os.Bundle
 import android.provider.Settings
 import android.provider.ContactsContract
 
@@ -11,6 +12,29 @@ class MainActivity : FlutterActivity() {
 
     companion object {
         const val CHANNEL = "com.vani/app_actions"
+        const val EXTRA_AUTO_LISTEN = "auto_listen"
+
+        // One-shot flag: set when VANI is opened via the QS tile,
+        // cleared the moment Dart consumes it.
+        @Volatile
+        var autoListenPending = false
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        readAutoListenExtra(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        readAutoListenExtra(intent)
+    }
+
+    private fun readAutoListenExtra(intent: Intent?) {
+        if (intent?.getBooleanExtra(EXTRA_AUTO_LISTEN, false) == true) {
+            autoListenPending = true
+        }
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -35,6 +59,11 @@ class MainActivity : FlutterActivity() {
                     VaniAccessibilityService.pendingData = data
                     result.success(true)
                 }
+                "consumeAutoListen" -> {
+                    val pending = autoListenPending
+                    autoListenPending = false
+                    result.success(pending)
+                }
                 "isAppInstalled" -> {
                     val packageName = call.argument<String>("packageName") ?: ""
                     result.success(isPackageInstalled(packageName))
@@ -49,6 +78,20 @@ class MainActivity : FlutterActivity() {
                         startActivity(intent)
                         result.success(true)
                     } else {
+                        result.success(false)
+                    }
+                }
+                "launchUrlInPackage" -> {
+                    val url = call.argument<String>("url") ?: ""
+                    val pkg = call.argument<String>("package") ?: ""
+                    try {
+                        val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                        intent.setPackage(pkg)
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        startActivity(intent)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        // Package can't handle this URL → let Dart fall back.
                         result.success(false)
                     }
                 }

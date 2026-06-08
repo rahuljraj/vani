@@ -96,6 +96,15 @@ class FastIntentEngine {
     // none installed → fall through to normal matching (likely Blinkit by name)
   }
 
+  // Food command with no app named → Swiggy direct (Zomato deferred to v1.1).
+  // Mirrors grocery: keeps food off Gemma so it works on a cold tile launch.
+  if (IntentDisambiguator.isFoodCommand(t)) {
+    final food = _foodDirect(t);
+    if (food != null) {
+      print('🍔 Food → Swiggy direct: "${food.parameters['item']}"');
+      return food;
+    }
+  }
   // No direct match. Before falling to Gemma, check for an ambiguous app tie
   // (e.g. "biryani mangwa do" → Swiggy vs Zomato) and ASK rather than guess.
   final candidates = IntentDisambiguator.disambiguationCandidates(t);
@@ -627,6 +636,22 @@ static VaniIntent? _searchInApp(String t) {
       speak:  item.isNotEmpty ? '$name pe $item dhundh raha hoon'
                               : '$name khol raha hoon',
       action: 'app_search_deeplink',
+    );
+  }
+
+  /// Food command with no app named → route straight to Swiggy, the only
+  /// food app whose in-app search is verified for v1.0 (Zomato deferred).
+  /// Routes via swiggy_search → SwiggyAction (package-pinned app-link), so it
+  /// never depends on Gemma being loaded.
+  static VaniIntent? _foodDirect(String t) {
+    final item = _extractFoodItem(t, 'swiggy');
+    if (item == null || item.isEmpty) return null;
+    return _intent(
+      type:   IntentType.orderFood,
+      app:    AppTarget.swiggy,
+      params: {'item': item},
+      speak:  'Swiggy pe $item dhundh raha hoon',
+      action: 'swiggy_search',
     );
   }
 

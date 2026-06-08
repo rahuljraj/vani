@@ -69,6 +69,19 @@ class PermissionService {
     }
   }
 
+  // ── Quick Settings tile auto-listen flag ──────
+  // Native sets this when VANI is opened via the QS tile.
+  // Returns true once, then clears (one-shot).
+  Future<bool> consumeAutoListen() async {
+    try {
+      final result = await _channel.invokeMethod<bool>('consumeAutoListen');
+      return result ?? false;
+    } catch (e) {
+      _log.e('consumeAutoListen error: $e');
+      return false;
+    }
+  }
+
   // ── All Files Access (MANAGE_EXTERNAL_STORAGE) ─
   Future<bool> get hasAllFilesAccess async =>
       await Permission.manageExternalStorage.isGranted;
