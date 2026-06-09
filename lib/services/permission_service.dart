@@ -82,19 +82,6 @@ class PermissionService {
     }
   }
 
-  // ── All Files Access (MANAGE_EXTERNAL_STORAGE) ─
-  Future<bool> get hasAllFilesAccess async =>
-      await Permission.manageExternalStorage.isGranted;
-
-  // On Android 11+, this opens the "All files access" system settings screen.
-  // Returns true if granted after returning from settings.
-  Future<bool> requestAllFilesAccess() async {
-    if (await Permission.manageExternalStorage.isGranted) return true;
-    final status = await Permission.manageExternalStorage.request();
-    _log.d('MANAGE_EXTERNAL_STORAGE: $status');
-    return status.isGranted;
-  }
-
   // ── Check All Required Permissions ────────────
   Future<Map<String, bool>> checkAllPermissions() async {
     return {

@@ -14,8 +14,10 @@ class InferenceConfig {
   // Filename must match the download URL's actual filename
   static const String modelFileName = 'gemma_model.task';
 
-  // SD card path — place the model here to skip download
-  static const String activeModelPath = '/sdcard/Download/gemma_model.task';
+  // Preload path (no storage permission needed) — push the model here to skip download:
+  //   adb push gemma_model.task /sdcard/Android/data/com.vani.vani/files/
+  static const String activeModelPath =
+      '/sdcard/Android/data/com.vani.vani/files/gemma_model.task';
 
   // Gemma 3 1B LiteRT-LM build (multi-prefill, q4, ekv2048)
   static const String modelDownloadUrl =

@@ -80,28 +80,34 @@ IMPORTANT:
 - Only use send_message/whatsapp when the user clearly says message/msg/bhejo/WhatsApp.
 ''';
 
-  static const String _sdCardModelPath    = '/sdcard/Download/gemma_model.task';
-  static const String _sdCardModelPathAlt = '/sdcard/Download/gemma_model.litertlm';
-
   Future<File> _modelFile() async {
     final docsDir = await getApplicationDocumentsDirectory();
     return File('${docsDir.path}/${InferenceConfig.modelFileName}');
   }
 
+  // Sources, in priority order — NEITHER needs a storage permission:
+  //  1. App-private external files dir (ADB-pushable; visible in file managers):
+  //       adb push gemma_model.task /sdcard/Android/data/com.vani.vani/files/
+  //  2. App-private internal cache (where we copy the model for native open()).
   Future<File?> _availableModelFile() async {
-    for (final path in [_sdCardModelPath, _sdCardModelPathAlt]) {
-      final f = File(path);
-      if (f.existsSync() && f.lengthSync() > 1024 * 1024) {
-        _log.i('Model on SD card ($path): ${f.lengthSync() ~/ (1024 * 1024)} MB');
-        return f;
-      }
+    final extDir  = await getExternalStorageDirectory(); // app-scoped, no permission
+    final extFile = extDir != null
+        ? File('${extDir.path}/${InferenceConfig.modelFileName}')
+        : null;
+    if (extFile != null &&
+        extFile.existsSync() &&
+        extFile.lengthSync() > 1024 * 1024) {
+      _log.i('Model in app storage: ${extFile.lengthSync() ~/ (1024 * 1024)} MB');
+      return extFile;
     }
+
     final docsFile = await _modelFile();
     if (docsFile.existsSync() && docsFile.lengthSync() > 1024 * 1024) {
-      _log.i('Model in docs: ${docsFile.path}');
+      _log.i('Model in internal cache: ${docsFile.path}');
       return docsFile;
     }
-    _log.w('No model file found — checked SD card and ${(await _modelFile()).path}');
+
+    _log.w('No model file found — checked app storage and ${docsFile.path}');
     return null;
   }
 
