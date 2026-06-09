@@ -5,10 +5,14 @@ import 'package:flutter/services.dart';
 import 'package:flutter_gemma/flutter_gemma.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app.dart';
+import 'core/feature_flags.dart';
 import 'services/app_registry.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Labs feature flags (all default OFF) — load before any service looks at them.
+  await FeatureFlags.init();
 
   await FlutterGemma.initialize();
 

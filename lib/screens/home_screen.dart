@@ -482,23 +482,42 @@ class _HomeScreenState extends State<HomeScreen>
             ),
           ]),
 
-          // Apps button
-          GestureDetector(
-            onTap: () => Navigator.pushNamed(context, '/apps'),
-            child: Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color:        VaniColors.surfaceLight,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: VaniColors.border),
-              ),
-              child: const Icon(
-                Icons.grid_view_rounded,
-                color: VaniColors.textSecondary,
-                size:  20,
+          // Labs + Apps buttons
+          Row(children: [
+            GestureDetector(
+              onTap: () => Navigator.pushNamed(context, '/labs'),
+              child: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color:        VaniColors.surfaceLight,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: VaniColors.border),
+                ),
+                child: const Icon(
+                  Icons.science_outlined,
+                  color: VaniColors.textSecondary,
+                  size:  20,
+                ),
               ),
             ),
-          ),
+            const SizedBox(width: 10),
+            GestureDetector(
+              onTap: () => Navigator.pushNamed(context, '/apps'),
+              child: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color:        VaniColors.surfaceLight,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: VaniColors.border),
+                ),
+                child: const Icon(
+                  Icons.grid_view_rounded,
+                  color: VaniColors.textSecondary,
+                  size:  20,
+                ),
+              ),
+            ),
+          ]),
         ],
       ),
     );

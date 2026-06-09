@@ -6,6 +6,7 @@ import 'screens/splash_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/apps_screen.dart';
+import 'screens/labs_screen.dart';
 
 class VaniApp extends StatelessWidget {
   const VaniApp({super.key});
@@ -36,6 +37,7 @@ class VaniApp extends StatelessWidget {
         '/onboarding': (_) => const OnboardingScreen(),
         '/home':       (_) => const HomeScreen(),
         '/apps':       (_) => const AppsScreen(),
+        '/labs':       (_) => const LabsScreen(),
       },
     );
   }
