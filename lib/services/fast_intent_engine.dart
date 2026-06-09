@@ -344,6 +344,10 @@ class FastIntentEngine {
 
 
   // ── Zomato ──────────────────────────────────────────────────────────────────
+  // v1.1: DEGRADED, honestly. No working in-app search link is known
+  // (zomato:// opens the app but drops the query), so the copy promises only
+  // an open — "khol raha hoon" — never a search. The item still rides along
+  // in params so the router/web fallback can use it.
   static VaniIntent? _zomato(String t) {
     if (!t.contains('zomato')) return null;
     final item = _extractFoodItem(t, 'zomato');
@@ -353,7 +357,7 @@ class FastIntentEngine {
       type:   IntentType.orderFood,
       app:    AppTarget.zomato,
       params: {'item': item},
-      speak:  'Zomato pe $item dhundh raha hoon',
+      speak:  'Zomato khol raha hoon — $item wahan khud dhundhna',
       action: 'zomato_search',
     );
   }

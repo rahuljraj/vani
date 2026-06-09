@@ -3,6 +3,7 @@
 import 'package:url_launcher/url_launcher.dart';
 import 'package:logger/logger.dart';
 import '../contacts_service.dart';
+import '../tts_service.dart';
 
 class CallAction {
   final _log = Logger();
@@ -25,8 +26,10 @@ class CallAction {
       return _openDialer(number);
     }
 
-    // No match → open empty dialer (graceful; replaces the old broken lookup URI).
+    // No match → say so honestly, then open empty dialer (graceful).
     _log.w('Call: no contact match for "$clean" — opening dialer');
+    await TtsService.instance
+        .speak('$clean contacts mein nahi mila — dialer khol raha hoon.');
     return _openDialer(null);
   }
 

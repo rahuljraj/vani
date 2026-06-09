@@ -52,7 +52,8 @@ class VaniStrings {
 }
 
 class VaniPackages {
-  static const blinkit   = 'com.blinkit.consumer';
+  // Blinkit kept the legacy Grofers package after the rebrand (device-verified)
+  static const blinkit   = 'com.grofers.customerapp';
   static const swiggy    = 'in.swiggy.android';
   static const zomato    = 'com.application.zomato';
   static const whatsapp  = 'com.whatsapp';

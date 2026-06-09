@@ -5,8 +5,9 @@
     <!-- ── Permissions ──────────────────────────── -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- FOREGROUND_SERVICE + RECEIVE_BOOT_COMPLETED removed in the v1.1 Play
+         audit — nothing uses them yet. Re-add alongside the Gemma keep-warm
+         foreground service (Phase 2 cold-start fix). -->
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
@@ -37,15 +38,13 @@
         </intent>
         <intent>
             <action android:name="android.intent.action.VIEW" />
-            <data android:scheme="in.blinkit.android" />
-        </intent>
-        <intent>
-            <action android:name="android.intent.action.VIEW" />
-            <data android:scheme="in.swiggy.android" />
-        </intent>
-        <intent>
-            <action android:name="android.intent.action.VIEW" />
             <data android:scheme="whatsapp" />
+        </intent>
+        <!-- https: wa.me drafts + every web fallback. Without this,
+             canLaunchUrl() silently returns false on Android 11+. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
         </intent>
         <intent>
             <action android:name="android.intent.action.DIAL" />
