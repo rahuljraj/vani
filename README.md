@@ -1,214 +1,148 @@
-# VANI — Voice AI Native Interface
+# VANI — Voice AI Native Interface for India
 
-> Your phone. Your voice. Your AI.
-> Built for India. Runs on your device. Nothing leaves your phone.
-
----
-
-## What Is VANI
-
-VANI is a privacy-first, on-device voice AI assistant for Android that
-lets you control your phone apps using your voice in Hindi, English,
-and Hinglish — with zero cloud processing.
-
-Say: *"Blinkit pe 2kg atta dhundho"*
-VANI opens Blinkit and searches automatically.
-
-Say: *"Phoenix Mall navigate karo"*
-VANI opens Google Maps with directions.
-
-Everything happens on your device. Always.
+> Your phone, your voice, in your language.
+> Hinglish-native. Understanding runs on your device.
 
 ---
 
-## Tech Stack
+## What is VANI
 
-| Layer        | Technology                          |
-|--------------|-------------------------------------|
-| UI           | Flutter (Android)                   |
-| On-device AI | Gemma 4 E2B via flutter_gemma       |
-| Voice Input  | Android microphone + record package |
-| Voice Output | Android native TTS (hi-IN / en-IN)  |
-| App Control  | Android Accessibility Service       |
-| App Launch   | Android Intents via url_launcher    |
-| Future       | TurboQuant KV cache (Q3 2026)       |
+VANI is a Hinglish-native voice assistant for Android that controls your
+everyday apps by voice — open apps, call and message contacts, navigate, and
+search groceries and food. It's built for the mid-range phones most Indians
+actually carry, not just flagships.
+
+- *"mummy ko call karo"* → finds the contact, pulls up the dialer
+- *"Blinkit pe doodh dhundho"* → opens Blinkit with the search ready
+- *"Surat railway station navigate karo"* → opens Maps with directions
 
 ---
 
-## Project Structure
+## How it works — a two-tier intent engine
+
+The core bet: most voice commands are patterns, not reasoning — so they
+shouldn't pay the cost of a large model.
+
+- **FastIntentEngine** — an on-device rule/pattern matcher resolves ~90% of
+  commands in under 50ms, with no model involved ("WhatsApp kholo",
+  "papa ko call karo").
+- **Gemma 3 1B (on-device)** — the local LLM wakes only for the ambiguous
+  ~10%, via `flutter_gemma` (LiteRT, ~530MB).
+
+This keeps VANI fast and light enough for a 6GB-RAM mid-range phone, and means
+the mic works the instant it opens — most commands never wait for the model.
+
+A category-aware disambiguator handles the tricky cases: in *"doodh order
+karo"* the item word "doodh" (milk) outweighs the generic verb "order", so it
+routes to groceries, not food delivery.
+
+---
+
+## Tech stack
+
+| Layer | Technology |
+| --- | --- |
+| UI | Flutter (Android) |
+| Fast path | FastIntentEngine (on-device rule matcher) |
+| On-device LLM | Gemma 3 1B via flutter_gemma (LiteRT) |
+| Speech-to-text | Online en_IN (v1.0); offline Vosk on roadmap |
+| Speech output | Android native TTS (hi-IN / en-IN) |
+| App control | Deep links / Android Intents + Accessibility Service |
+| State | Riverpod |
+
+---
+
+## Privacy
+
+VANI is privacy-first, and honest about where that line sits today:
+
+- **Intent understanding runs on the device** — the rule engine and Gemma 3 1B
+  are local. No cloud LLM.
+- **App actions are local** — deep links, intents, and the Accessibility
+  Service act on apps you're already signed into.
+- **Speech-to-text in v1.0 uses an online service** (`en_IN`). This is the one
+  part that leaves the device, and it's disclosed in-app:
+  *"Runs on your device, except speech-to-text."*
+- **Offline STT (Vosk) is on the roadmap**, so the full pipeline can run in
+  airplane mode.
+- No account required. No analytics or tracking servers. No cloud API calls
+  for understanding.
+
+---
+
+## Supported commands (v1.0)
+
+| Command | What it does | Status |
+| --- | --- | --- |
+| Open app | Launch any installed app by name (fuzzy-matched) | ✅ Working |
+| Call contact | Resolve contact by name → pre-fill dialer | ✅ Working (auto-call in v1.1) |
+| WhatsApp | Resolve contact → open chat, message pre-drafted | ✅ Working (drafts; never auto-sends) |
+| Navigate | Open Google Maps with directions | ✅ Working |
+| Order food | Swiggy in-app search via verified app-link | ✅ Working |
+| Grocery | Blinkit in-app search via verified app-link | ✅ Working |
+| Zomato | — | 🔜 v1.1 (deep link being verified) |
+
+---
+
+## Example commands
 
 ```
-vani/
-├── lib/
-│   ├── main.dart                    ← Entry point
-│   ├── app.dart                     ← Routes + theme
-│   ├── core/
-│   │   ├── constants.dart           ← Colors, strings, packages
-│   │   └── inference_config.dart    ← TurboQuant toggle lives here
-│   ├── models/
-│   │   ├── vani_intent.dart         ← Intent data model
-│   │   └── connected_app.dart       ← App toggle model
-│   ├── services/
-│   │   ├── gemma_service.dart       ← Gemma 4 E2B brain
-│   │   ├── audio_service.dart       ← Voice recording
-│   │   ├── tts_service.dart         ← Voice output
-│   │   ├── permission_service.dart  ← Android permissions
-│   │   └── actions/
-│   │       ├── action_router.dart   ← Routes intents to apps
-│   │       ├── maps_action.dart     ← Google Maps
-│   │       ├── blinkit_action.dart  ← Blinkit
-│   │       ├── swiggy_action.dart   ← Swiggy
-│   │       └── whatsapp_action.dart ← WhatsApp
-│   └── screens/
-│       ├── splash_screen.dart       ← App launch animation
-│       ├── onboarding_screen.dart   ← Permissions setup
-│       ├── home_screen.dart         ← Main voice interface
-│       └── apps_screen.dart         ← Connected apps toggles
-└── android/
-    └── app/src/main/
-        ├── kotlin/com/vani/vani/
-        │   ├── MainActivity.kt              ← Flutter bridge
-        │   └── VaniAccessibilityService.kt  ← App control engine
-        ├── res/xml/
-        │   └── accessibility_service_config.xml
-        └── AndroidManifest.xml
+"WhatsApp kholo"
+"mummy ko call karo"
+"raju bhai sa ko whatsapp karo, late ho jaunga"
+"Surat railway station navigate karo"
+"Blinkit pe doodh dhundho"
+"biryani mangwa do"
 ```
 
 ---
 
-## Day 1 Setup
+## Project structure
 
-### Prerequisites
-- Flutter SDK 3.19+ installed
-- Android Studio with SDK + NDK
-- Physical Android device (6GB+ RAM recommended)
-- USB debugging enabled on device
-- Hugging Face account (free)
+```
+lib/
+├── core/                     ← constants, inference config
+├── models/                   ← intent + app models
+├── services/
+│   ├── fast_intent_engine.dart   ← ~90% of commands, <50ms
+│   ├── gemma_service.dart        ← Gemma 3 1B fallback
+│   ├── intent_disambiguator.dart ← category-aware scoring
+│   ├── audio_service.dart        ← STT
+│   ├── tts_service.dart          ← voice output
+│   └── actions/                  ← per-app routers (Maps, Blinkit, Swiggy, WhatsApp)
+└── screens/                  ← splash, onboarding, home, apps
+android/app/src/main/kotlin/com/vani/vani/
+├── MainActivity.kt               ← Flutter ⇄ native bridge
+├── VaniTileService.kt            ← Quick Settings tile (tap → listen)
+└── VaniAccessibilityService.kt   ← app-control fallback
+```
 
-### Step 1 — Clone and install
+---
 
-```bash
-git clone <your-repo>
-cd vani
+## Setup (dev)
+
+**Prerequisites:** Flutter SDK 3.19+, Android Studio (SDK + NDK), a physical
+Android device with 6GB+ RAM and USB debugging on.
+
+```
 flutter pub get
-```
-
-### Step 2 — Download Gemma 4 E2B model (~2.4GB)
-
-```bash
-# Install HuggingFace CLI
-pip install huggingface_hub
-
-# Login with your HF token
-huggingface-cli login
-
-# Download model
-huggingface-cli download \
-  google/gemma-4-E2B-it \
-  --include "*.litertlm" \
-  --local-dir assets/models/
-```
-
-### Step 3 — Run on device
-
-```bash
-# Connect Android phone via USB
+# Place the Gemma 3 1B LiteRT model on the device at /sdcard/Download/
+# (see flutter_gemma docs for the model file), then:
 flutter run
 ```
 
-### Step 4 — Enable Accessibility Service
-
-When prompted in onboarding:
-1. Go to Settings → Accessibility
-2. Find "VANI Assistant"
-3. Toggle ON
-4. Confirm
-
----
-
-## Supported Apps (Phase 1)
-
-| App          | Integration          | Status      |
-|--------------|----------------------|-------------|
-| Google Maps  | Deep links + Intent  | ✅ Ready    |
-| Blinkit      | Deep link + Acc Svc  | ✅ Ready    |
-| Swiggy       | Acc Svc + web        | ✅ Ready    |
-| Zomato       | Web fallback         | ✅ Ready    |
-| WhatsApp     | Acc Svc (Phase 2)    | ⚠️ Partial  |
-| YouTube      | Deep link            | ✅ Ready    |
-| Amazon       | Web fallback         | ✅ Ready    |
-| PhonePe      | View only            | 🔜 Soon     |
-
----
-
-## Example Voice Commands
-
-```
-Navigation:
-"Nearest petrol pump dikhao"
-"IGI Airport navigate karo"
-"Pizza hut dhundho paas mein"
-
-Grocery:
-"Blinkit pe 2kg atta order karo"
-"Zepto pe doodh add karo"
-"Swiggy pe biryani search karo"
-
-Messaging:
-"Mom ko WhatsApp karo"
-"Papa ko message karo bolo 10 min mein aa raha hoon"
-
-Media:
-"YouTube pe Arijit Singh songs chalao"
-"Trending songs play karo"
-
-General:
-"Aaj kaisa din hai VANI"
-"Mujhe yaad dilao 8 baje medicine leni hai"
-```
-
----
-
-## TurboQuant Integration (Q3 2026)
-
-When TurboQuant ships officially, open `lib/core/inference_config.dart`
-and change:
-
-```dart
-static const bool useTurboQuant = false;
-// to:
-static const bool useTurboQuant = true;
-```
-
-This single change gives every VANI user:
-- 6x better memory efficiency
-- ~40% faster responses
-- Support for longer conversations
-- Works on phones with 2GB+ RAM (vs 4GB+ currently)
-
----
-
-## Privacy Promise
-
-- Zero data sent to any server
-- Zero cloud API calls
-- Voice is processed on-device by Gemma 4 E2B
-- Accessibility Service data never stored, never transmitted
-- App interactions are local only
-- No account required, ever
+On first launch, grant microphone and accessibility permissions in onboarding.
 
 ---
 
 ## Roadmap
 
-| Phase | Timeline  | Features                                     |
-|-------|-----------|----------------------------------------------|
-| 1     | Week 1–2  | Foundation (this repo)                       |
-| 2     | Week 3–5  | Swiggy, WhatsApp send, cross-app chaining     |
-| 3     | Week 6–8  | Context memory, user preferences, wake word  |
-| 4     | Q3 2026   | TurboQuant, vernacular languages, VANI SME   |
+| Phase | Focus |
+| --- | --- |
+| v1.0 | 5 core commands hardened · onboarding · signed APK · closed beta (10–20 users in Surat) |
+| v1.1 | Offline STT (Vosk, airplane-mode) · Zomato · auto-call · share-target ("ye raju ko bhejo") |
+| Later | Wake word · lower-RAM optimization · more vernacular languages |
 
 ---
 
-*Built with ❤️ for India*
-*Privacy first. Always.*
+*Built for India. On-device first.*
