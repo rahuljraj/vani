@@ -117,3 +117,17 @@ static String? resolve(String transcript) {
 - 15 min: apply 8-line fix, hot reload
 - 30 min: voice-test all 10 cases above
 - 5 min: commit + push
+
+## Future feature set session — June 10, 2026 (cloud, branch feat/share-bubble-wakeword)
+
+Three Labs features behind flags (ALL default OFF — app identical to main
+with toggles off): share-target ("ye raju ko bhejo", disabled activity-alias
+→ wa.me drafts, never auto-send), floating bubble (overlay + special-use
+FGS, reuses tile's EXTRA_AUTO_LISTEN, Play drafts written), in-app "Hey
+VANI" wake word (native Vosk KWS, foreground-only, no new permissions).
+flutter analyze CLEAN (real toolchain in cloud). NOT verified: any device
+behavior + Kotlin compile (no Android SDK there) — run
+docs/future-device-checklist.md section 0 first. Offline STT stays parked;
+note: wake word's native vosk-android dep is the better future path for it
+than vosk_flutter. Open decisions: Porcupine $, FGS_MICROPHONE for
+always-on, model bundling, FileProvider fallback.
