@@ -8,6 +8,7 @@ import '../services/tts_service.dart';
 import '../services/gemma_service.dart';
 import '../services/permission_service.dart';
 import '../services/share_target_service.dart';
+import '../services/wake_word_service.dart';
 import '../services/actions/action_router.dart';
 import '../models/vani_intent.dart';
 import '../services/app_deep_links.dart';
@@ -53,6 +54,7 @@ class _HomeScreenState extends State<HomeScreen>
     _initModel();
     _checkAutoListen();
     _checkPendingShare();
+    _initWakeWord();
   }
 
   @override
@@ -61,7 +63,23 @@ class _HomeScreenState extends State<HomeScreen>
     if (state == AppLifecycleState.resumed) {
       _checkAutoListen();
       _checkPendingShare();
+      // Wake word is in-app only: KWS mic comes back with the foreground.
+      if (FeatureFlags.wakeWord.value) WakeWordService.instance.start();
+    } else if (state == AppLifecycleState.paused) {
+      // ...and is ALWAYS released when VANI leaves the foreground.
+      if (FeatureFlags.wakeWord.value) WakeWordService.instance.stop();
     }
+  }
+
+  /// Wake word (Labs, default OFF): "Hey VANI" while the app is open →
+  /// same flow as tapping the mic. Handler is registered unconditionally
+  /// so a mid-session Labs toggle works; engine start stays flag-gated.
+  Future<void> _initWakeWord() async {
+    WakeWordService.instance.registerHandler(() {
+      if (mounted && _state == VaniState.idle) _startListening();
+    });
+    if (!FeatureFlags.wakeWord.value) return;
+    await WakeWordService.instance.start();
   }
 
   /// Opened via the Quick Settings tile → jump straight to listening.
@@ -212,6 +230,8 @@ class _HomeScreenState extends State<HomeScreen>
   // Gemma before it's loaded, GemmaService.process() returns a graceful
   // "AI load ho rahi hai" reply — no crash, no hang.
   await TtsService.instance.stop();
+  // Wake word holds the mic — release it before Google STT needs it.
+  await WakeWordService.instance.pauseForStt();
 
   final ok = await AudioService.instance.startSttListening(
     onResult: (text) {
@@ -239,6 +259,7 @@ class _HomeScreenState extends State<HomeScreen>
 
     if (text.trim().isEmpty) {
       if (mounted) setState(() => _state = VaniState.idle);
+      WakeWordService.instance.resumeAfterStt();
       return;
     }
 
@@ -248,6 +269,7 @@ class _HomeScreenState extends State<HomeScreen>
   Future<void> _cancelListening() async {
     await AudioService.instance.stopSttListening();
     if (mounted) setState(() => _state = VaniState.idle);
+    WakeWordService.instance.resumeAfterStt();
   }
 
   // ── Process Text (called from text input) ───────
@@ -274,6 +296,7 @@ class _HomeScreenState extends State<HomeScreen>
         _pendingChoice = intent;
       });
       await TtsService.instance.speak(intent.speakText);
+      WakeWordService.instance.resumeAfterStt();
       return;
     }
 
@@ -285,6 +308,7 @@ class _HomeScreenState extends State<HomeScreen>
     await _router.execute(intent);
 
     if (mounted) setState(() => _state = VaniState.idle);
+    WakeWordService.instance.resumeAfterStt();
   }
 
  void _onChoice(String label) {

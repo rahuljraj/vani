@@ -8,7 +8,9 @@ import 'package:flutter/material.dart';
 import '../core/constants.dart';
 import '../core/feature_flags.dart';
 import '../services/bubble_service.dart';
+import '../services/permission_service.dart';
 import '../services/share_target_service.dart';
+import '../services/wake_word_service.dart';
 
 class LabsScreen extends StatefulWidget {
   const LabsScreen({super.key});
@@ -162,7 +164,73 @@ class _LabsScreenState extends State<LabsScreen> {
   }
 
   Future<void> _toggleWakeWord(bool on) async {
-    await FeatureFlags.setWakeWord(on);
+    if (!on) {
+      await WakeWordService.instance.stop();
+      await FeatureFlags.setWakeWord(false);
+      return;
+    }
+
+    if (!await PermissionService.instance.hasMicrophone) {
+      final granted = await PermissionService.instance.requestMicrophone();
+      if (!granted) {
+        _snack('Mic permission ke bina wake word nahi chalega.');
+        return;
+      }
+    }
+
+    // start() checks the flag, so set it first; roll back if the engine
+    // can't actually run (model missing, native lib failure...).
+    await FeatureFlags.setWakeWord(true);
+    final err = await WakeWordService.instance.start();
+    if (err == null) {
+      _snack('"Hey VANI" active — app khula rakhein.');
+      return;
+    }
+    await FeatureFlags.setWakeWord(false);
+    if (err == 'model_missing') {
+      await _showWakeModelInstructions();
+    } else {
+      _snack('Wake word start nahi hua: $err');
+    }
+  }
+
+  Future<void> _showWakeModelInstructions() async {
+    final path = await WakeWordService.instance.modelPath();
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: VaniColors.surfaceLight,
+        title: const Text(
+          '🗣️ Model chahiye',
+          style: TextStyle(color: VaniColors.primary, fontSize: 18),
+        ),
+        content: SingleChildScrollView(
+          child: SelectableText(
+            'Wake word ka model (~36 MB) APK mein bundle nahi hai.\n\n'
+            '1. alphacephei.com/vosk/models se\n'
+            '   vosk-model-small-en-in-0.4.zip download karein\n'
+            '2. Unzip karein\n'
+            '3. Push karein:\n\n'
+            'adb push vosk-model-small-en-in-0.4 '
+            '"$path/vosk-model-small-en-in-0.4"\n\n'
+            'Phir toggle dobara on karein.',
+            style: const TextStyle(
+              color: VaniColors.textSecondary,
+              fontSize: 13,
+              height: 1.5,
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Theek hai',
+                style: TextStyle(color: VaniColors.accent)),
+          ),
+        ],
+      ),
+    );
   }
 
   void _snack(String msg) {

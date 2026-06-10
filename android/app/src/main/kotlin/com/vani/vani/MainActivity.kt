@@ -11,6 +11,7 @@ import android.os.Bundle
 import android.provider.Settings
 import android.provider.ContactsContract
 import androidx.core.content.IntentCompat
+import java.io.File
 
 class MainActivity : FlutterActivity() {
 
@@ -74,13 +75,27 @@ class MainActivity : FlutterActivity() {
     private val shareAlias: ComponentName
         get() = ComponentName(this, "$packageName.ShareTargetAlias")
 
+    // Held for native→Dart calls (wake-word trigger events).
+    private var channel: MethodChannel? = null
+
+    // Lazy: created on first wakeWordStart, reused across stop/start cycles
+    // so the ~40MB model loads once.
+    private var wakeWord: VaniWakeWord? = null
+
+    override fun onDestroy() {
+        wakeWord?.stop()
+        super.onDestroy()
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
-        MethodChannel(
+        val ch = MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             CHANNEL
-        ).setMethodCallHandler { call, result ->
+        )
+        channel = ch
+        ch.setMethodCallHandler { call, result ->
             when (call.method) {
                 "isAccessibilityEnabled" -> {
                     result.success(isAccessibilityServiceEnabled())
@@ -193,6 +208,23 @@ class MainActivity : FlutterActivity() {
                 }
                 "isBubbleRunning" -> {
                     result.success(VaniBubbleService.isRunning)
+                }
+                "wakeWordStart" -> {
+                    val ww = wakeWord ?: VaniWakeWord {
+                        runOnUiThread { channel?.invokeMethod("onWakeWord", null) }
+                    }.also { wakeWord = it }
+                    // null = started; otherwise a reason code for Dart.
+                    result.success(ww.start(File(filesDir, "wake").absolutePath))
+                }
+                "wakeWordStop" -> {
+                    wakeWord?.stop()
+                    result.success(true)
+                }
+                "wakeWordRunning" -> {
+                    result.success(wakeWord?.running ?: false)
+                }
+                "wakeWordModelPath" -> {
+                    result.success(File(filesDir, "wake").absolutePath)
                 }
                 else -> result.notImplemented()
             }
