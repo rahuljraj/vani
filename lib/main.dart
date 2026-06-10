@@ -7,12 +7,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app.dart';
 import 'core/feature_flags.dart';
 import 'services/app_registry.dart';
+import 'services/share_target_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Labs feature flags (all default OFF) — load before any service looks at them.
   await FeatureFlags.init();
+  // Component enabled-state survives app-data clears; flags don't. Re-align
+  // the share-sheet alias with the flag on every cold start.
+  await ShareTargetService.instance.syncNativeState();
 
   await FlutterGemma.initialize();
 

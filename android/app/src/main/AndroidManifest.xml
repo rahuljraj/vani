@@ -77,6 +77,32 @@
             </intent-filter>
         </activity>
 
+        <!-- ── Share target (Labs, default OFF) ──────────────────────
+             android:enabled="false": VANI shows up in the share sheet ONLY
+             after the user flips the Labs toggle (setComponentEnabledSetting).
+             VANI is a share TARGET — it receives only what the user
+             explicitly shares, never reads content on its own. -->
+        <activity-alias
+            android:name=".ShareTargetAlias"
+            android:targetActivity=".MainActivity"
+            android:enabled="false"
+            android:exported="true"
+            android:label="VANI">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+                <data android:mimeType="image/*" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+        </activity-alias>
+
         <!-- ── VANI Accessibility Service ───────── -->
         <service
             android:name=".VaniAccessibilityService"

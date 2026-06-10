@@ -2,13 +2,16 @@
 
 import 'package:flutter/material.dart';
 import '../core/constants.dart';
+import '../core/feature_flags.dart';
 import '../services/audio_service.dart';
 import '../services/tts_service.dart';
 import '../services/gemma_service.dart';
 import '../services/permission_service.dart';
+import '../services/share_target_service.dart';
 import '../services/actions/action_router.dart';
 import '../models/vani_intent.dart';
 import '../services/app_deep_links.dart';
+import 'share_forward_screen.dart';
 
 enum VaniState { idle, listening, thinking, speaking, error }
 
@@ -49,12 +52,16 @@ class _HomeScreenState extends State<HomeScreen>
     _setupAnimations();
     _initModel();
     _checkAutoListen();
+    _checkPendingShare();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // Warm tile-tap: app resumes with the native flag already set.
-    if (state == AppLifecycleState.resumed) _checkAutoListen();
+    if (state == AppLifecycleState.resumed) {
+      _checkAutoListen();
+      _checkPendingShare();
+    }
   }
 
   /// Opened via the Quick Settings tile → jump straight to listening.
@@ -65,6 +72,18 @@ class _HomeScreenState extends State<HomeScreen>
     if (_state == VaniState.listening || _state == VaniState.thinking) return;
     _autoListened = true;                // suppress the model-ready greeting
     _startListening();                   // mic on now — no wait for Gemma
+  }
+
+  /// Share-launched (Labs share target, default OFF): a one-shot payload is
+  /// waiting — hand it to the voice forward flow. Mirrors the tile pattern.
+  Future<void> _checkPendingShare() async {
+    if (!FeatureFlags.shareTarget.value) return;
+    final payload = await ShareTargetService.instance.consumePending();
+    if (payload == null || !mounted) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => ShareForwardScreen(payload: payload)),
+    );
   }
 
   void _setupAnimations() {

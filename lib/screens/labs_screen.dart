@@ -7,6 +7,7 @@
 import 'package:flutter/material.dart';
 import '../core/constants.dart';
 import '../core/feature_flags.dart';
+import '../services/share_target_service.dart';
 
 class LabsScreen extends StatefulWidget {
   const LabsScreen({super.key});
@@ -84,6 +85,13 @@ class _LabsScreenState extends State<LabsScreen> {
   // ── Toggle handlers (feature commits wire real side-effects here) ──
 
   Future<void> _toggleShareTarget(bool on) async {
+    // Flip the native share-sheet alias first; only persist the flag if the
+    // component state actually changed.
+    final ok = await ShareTargetService.instance.setEnabled(on);
+    if (!ok) {
+      _snack('Share target set nahi ho paya — dobara try karein.');
+      return;
+    }
     await FeatureFlags.setShareTarget(on);
   }
 
@@ -93,6 +101,11 @@ class _LabsScreenState extends State<LabsScreen> {
 
   Future<void> _toggleWakeWord(bool on) async {
     await FeatureFlags.setWakeWord(on);
+  }
+
+  void _snack(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   // ── UI ──────────────────────────────────────────────────────────────
