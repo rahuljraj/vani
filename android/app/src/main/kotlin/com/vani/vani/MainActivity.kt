@@ -165,6 +165,35 @@ class MainActivity : FlutterActivity() {
                     val uris = call.argument<List<String>>("uris") ?: emptyList()
                     result.success(forwardShare(pkg, text, mime, uris))
                 }
+                "hasOverlayPermission" -> {
+                    result.success(Settings.canDrawOverlays(this))
+                }
+                "requestOverlayPermission" -> {
+                    try {
+                        startActivity(Intent(
+                            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                            Uri.parse("package:$packageName")
+                        ))
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.success(false)
+                    }
+                }
+                "startBubble" -> {
+                    if (Settings.canDrawOverlays(this)) {
+                        startForegroundService(Intent(this, VaniBubbleService::class.java))
+                        result.success(true)
+                    } else {
+                        result.success(false)
+                    }
+                }
+                "stopBubble" -> {
+                    stopService(Intent(this, VaniBubbleService::class.java))
+                    result.success(true)
+                }
+                "isBubbleRunning" -> {
+                    result.success(VaniBubbleService.isRunning)
+                }
                 else -> result.notImplemented()
             }
         }

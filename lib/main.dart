@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app.dart';
 import 'core/feature_flags.dart';
 import 'services/app_registry.dart';
+import 'services/bubble_service.dart';
 import 'services/share_target_service.dart';
 
 void main() async {
@@ -17,6 +18,11 @@ void main() async {
   // Component enabled-state survives app-data clears; flags don't. Re-align
   // the share-sheet alias with the flag on every cold start.
   await ShareTargetService.instance.syncNativeState();
+  // Bubble left on by the user → bring it back (it doesn't survive reboots
+  // on its own; no boot receiver by design).
+  if (FeatureFlags.floatingBubble.value) {
+    await BubbleService.instance.startIfPermitted();
+  }
 
   await FlutterGemma.initialize();
 

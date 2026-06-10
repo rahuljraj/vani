@@ -12,7 +12,12 @@
         android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
         tools:ignore="ScopedStorage" />
-    <uses-permission android:name="android.permission.READ_CONTACTS" />    
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <!-- Floating bubble (Labs, default OFF): overlay button + special-use
+         FGS. Both need Play declarations — docs/play-bubble-permissions.md.
+         Overlay permission is requested only after the in-app explainer. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission
         android:name="android.permission.BIND_ACCESSIBILITY_SERVICE"
         tools:ignore="ProtectedPermissions" />
@@ -127,6 +132,16 @@
             <intent-filter>
                 <action android:name="android.service.quicksettings.action.QS_TILE" />
             </intent-filter>
+        </service>
+
+        <!-- ── Floating bubble (Labs, default OFF) ───────────────── -->
+        <service
+            android:name=".VaniBubbleService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="User-toggled draggable launcher bubble for the voice assistant; tapping it opens the assistant in listening mode" />
         </service>
 
         <meta-data

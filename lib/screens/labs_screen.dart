@@ -7,6 +7,7 @@
 import 'package:flutter/material.dart';
 import '../core/constants.dart';
 import '../core/feature_flags.dart';
+import '../services/bubble_service.dart';
 import '../services/share_target_service.dart';
 
 class LabsScreen extends StatefulWidget {
@@ -96,7 +97,68 @@ class _LabsScreenState extends State<LabsScreen> {
   }
 
   Future<void> _toggleBubble(bool on) async {
-    await FeatureFlags.setFloatingBubble(on);
+    if (!on) {
+      await BubbleService.instance.stop();
+      await FeatureFlags.setFloatingBubble(false);
+      return;
+    }
+
+    // Play policy: explain in-app BEFORE sending the user to the system
+    // overlay-permission screen.
+    final proceed = await _showBubbleExplainer();
+    if (proceed != true) return;
+
+    if (!await BubbleService.instance.hasOverlayPermission()) {
+      await BubbleService.instance.requestOverlayPermission();
+      _snack('"Display over other apps" allow karein, '
+          'phir wapas aakar toggle on karein.');
+      return; // flag stays OFF until the permission actually exists
+    }
+
+    final ok = await BubbleService.instance.start();
+    if (!ok) {
+      _snack('Bubble start nahi hua — dobara try karein.');
+      return;
+    }
+    await FeatureFlags.setFloatingBubble(true);
+  }
+
+  Future<bool?> _showBubbleExplainer() {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: VaniColors.surfaceLight,
+        title: const Text(
+          '🫧 Floating bubble',
+          style: TextStyle(color: VaniColors.primary, fontSize: 18),
+        ),
+        content: const Text(
+          'Screen pe ek chhota VANI button hamesha dikhega — kisi bhi app '
+          'ke upar. Tap karte hi VANI khulega aur sunna shuru karega.\n\n'
+          'Iske liye Android ka "Display over other apps" permission '
+          'chahiye. Ek chhota notification bhi dikhega jab tak bubble '
+          'on hai.\n\n'
+          'Experimental: battery management ise band kar sakti hai.',
+          style: TextStyle(
+            color: VaniColors.textSecondary,
+            fontSize: 14,
+            height: 1.5,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel',
+                style: TextStyle(color: VaniColors.textSecondary)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Aage badhein',
+                style: TextStyle(color: VaniColors.accent)),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _toggleWakeWord(bool on) async {
