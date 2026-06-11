@@ -26,7 +26,10 @@ class ContactsService {
   List<Contact> _contacts = [];
   bool _loaded = false;
 
-  static const double _fuzzyThreshold = 0.45;
+  // Raised from 0.45 → 0.62: a lone "best" guess was dialing wrong people.
+  static const double _fuzzyThreshold = 0.62;
+  // Top match must also beat the runner-up by this margin to commit.
+  static const double _fuzzyMargin = 0.12;
 
   static String _norm(String s) =>
       s.toLowerCase().replaceAll(RegExp(r'[\s._\-]+'), '');
@@ -88,18 +91,32 @@ class ContactsService {
         return c.number;
       }
     }
-    // Stage 4: fuzzy (Dice).
+    // Stage 4: fuzzy (Dice) — commit ONLY if the top match clears the
+    // threshold AND beats the runner-up by the margin. Otherwise return null
+    // so VANI honestly says "nahi mila" instead of dialing the wrong person.
     Contact? best;
     double bestScore = 0;
+    double secondScore = 0;
     for (final c in _contacts) {
       final s = q.similarityTo(c.name.toLowerCase());
-      if (s > bestScore) { bestScore = s; best = c; }
+      if (s > bestScore) {
+        secondScore = bestScore;
+        bestScore = s;
+        best = c;
+      } else if (s > secondScore) {
+        secondScore = s;
+      }
     }
-    if (best != null && bestScore >= _fuzzyThreshold) {
-      _log.d('📇 fuzzy: "$q" → ${best.name} (${bestScore.toStringAsFixed(2)})');
+    final margin = bestScore - secondScore;
+    _log.d('📇 fuzzy top: "$q" → ${best?.name} '
+        '(${bestScore.toStringAsFixed(2)}, margin ${margin.toStringAsFixed(2)})');
+    if (best != null && bestScore >= _fuzzyThreshold && margin >= _fuzzyMargin) {
+      _log.d('📇 fuzzy commit: "$q" → ${best.name}');
       return best.number;
     }
-    _log.w('📇 no contact match for "$q"');
+    _log.w('📇 no confident match for "$q" '
+        '(top ${bestScore.toStringAsFixed(2)}, '
+        'runner-up ${secondScore.toStringAsFixed(2)})');
     return null;
   }
 }

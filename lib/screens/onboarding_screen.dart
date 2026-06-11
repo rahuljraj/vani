@@ -93,11 +93,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Widget _buildStep() {
     switch (_step) {
       case 0:
+        // Honest privacy line — matches the README: understanding is
+        // on-device; speech-to-text is the one online piece in v1.0.
         return _stepContent(
           emoji:    '🎙️',
           title:    'Namaste!\nMain hoon VANI',
           subtitle: 'Aapka personal voice assistant.\nSirf aapka. Sirf aapke phone pe.',
-          detail:   'Koi data server pe nahi jaata.\nSab kuch aapke phone mein hi hota hai.',
+          detail:   'Aapki baat phone pe hi samjhi jaati hai.\n'
+                    'Sirf speech-to-text online hota hai —\nbaaki kuch bhi bahar nahi jaata.',
         );
       case 1:
         return _stepContent(
@@ -108,19 +111,25 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           granted:  _micGranted,
         );
       case 2:
+        // Prominent disclosure (Play accessibility policy): say exactly what
+        // the service does and does not do, before sending to settings.
         return _stepContent(
           emoji:    '♿',
           title:    'Accessibility Access',
-          subtitle: 'VANI ko aapke apps control\nkarne ki izazat chahiye.',
-          detail:   'Settings mein VANI Assistant\n"On" karein.',
+          subtitle: 'VANI accessibility ka istemaal sirf\naapke bole hue commands se apps\nkholne aur chalane ke liye karta hai.',
+          detail:   'VANI aapki screen ka content kabhi\nstore ya share nahi karta.\n'
+                    'Settings mein VANI Assistant "On" karein.',
           granted:  _accGranted,
         );
       case 3:
+        // First-use prompt: hand the user a command that works on try #1.
         return _stepContent(
           emoji:    '✅',
           title:    'Sab ready hai!',
-          subtitle: 'VANI ab aapke saath kaam\nkarne ke liye taiyaar hai.',
-          detail:   'Blinkit, Maps, WhatsApp aur\nbahut kuch — sirf awaaz se.',
+          subtitle: 'Button dabaiye aur boliye —',
+          detail:   '"Blinkit pe doodh dhundho"\n'
+                    '"Mummy ko call karo"\n'
+                    '"Station ka rasta dikhao"',
         );
       default:
         return const SizedBox();

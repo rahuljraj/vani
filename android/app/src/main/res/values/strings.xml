@@ -2,8 +2,10 @@
 <resources>
     <string name="app_name">VANI</string>
     <string name="accessibility_service_description">
-        VANI uses accessibility to help you control apps
-        by voice. Everything stays on your device —
-        nothing is sent to any server.
+        VANI helps you control apps by voice. With your permission, VANI reads
+        on-screen content and performs taps and text input on your behalf to
+        carry out the voice commands you give — such as opening an app, typing
+        a search, or tapping a button. Screen content is used only to perform
+        the action you asked for.
     </string>
 </resources>

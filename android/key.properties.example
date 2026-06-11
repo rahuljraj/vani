@@ -1,0 +1,6 @@
+# Copy to android/key.properties (gitignored — NEVER commit the real file)
+# and fill in after generating the keystore. See docs/release-signing.md.
+storeFile=../keystore/vani-release.jks
+storePassword=CHANGE_ME
+keyAlias=vani
+keyPassword=CHANGE_ME

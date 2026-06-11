@@ -162,28 +162,13 @@ class _HomeScreenState extends State<HomeScreen>
         _failWith(
           'Model download fail ho gaya.\n'
           'Internet check karein, ya model file ko\n'
-          '/sdcard/Download/gemma_model.litertlm pe daalein.',
+          '/sdcard/Android/data/com.vani.vani/files/gemma_model.task pe daalein.',
         );
         return;
       }
     }
 
-    // MANAGE_EXTERNAL_STORAGE is required on Android 11+ to copy the model
-    // file from /sdcard/Download/ to internal storage on first launch.
-    if (!await PermissionService.instance.hasAllFilesAccess) {
-      if (mounted) setState(() => _loadingStep = 'Storage access chahiye — "Allow" karein');
-      final granted = await PermissionService.instance.requestAllFilesAccess();
-      if (!granted) {
-        _failWith(
-          'Storage permission nahi mila.\n'
-          'Settings → Apps → VANI → Permissions\n'
-          'mein "All files access" allow karein.',
-        );
-        return;
-      }
-    }
-
-    if (mounted) setState(() {
+        if (mounted) setState(() {
       _loadingStep = 'Model load ho raha hai... (pehli baar thoda time lagega)';
       _isDownloading = true;
       _downloadProgress = 0.0;

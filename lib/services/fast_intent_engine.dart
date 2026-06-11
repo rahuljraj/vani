@@ -344,6 +344,10 @@ class FastIntentEngine {
 
 
   // ── Zomato ──────────────────────────────────────────────────────────────────
+  // v1.1: DEGRADED, honestly. No working in-app search link is known
+  // (zomato:// opens the app but drops the query), so the copy promises only
+  // an open — "khol raha hoon" — never a search. The item still rides along
+  // in params so the router/web fallback can use it.
   static VaniIntent? _zomato(String t) {
     if (!t.contains('zomato')) return null;
     final item = _extractFoodItem(t, 'zomato');
@@ -353,7 +357,7 @@ class FastIntentEngine {
       type:   IntentType.orderFood,
       app:    AppTarget.zomato,
       params: {'item': item},
-      speak:  'Zomato pe $item dhundh raha hoon',
+      speak:  'Zomato khol raha hoon — $item wahan khud dhundhna',
       action: 'zomato_search',
     );
   }
@@ -595,7 +599,7 @@ static VaniIntent? _searchInApp(String t) {
   /// Recover the bare item from a command with no app name ("biryani mangwa do").
   static String _pendingItem(String t) {
     var item = t
-      .replaceAll(RegExp(r'\b(order\s*karo|order\s*kar\s*do|mangao|mangwa\s*do|mangwana\s*hai|search\s*karo|dhundho|dhundh\s*do|dhundo|dhundh|chahiye|lao|dedo|de\s*do|ka\s*order|ek)\b'), ' ')
+     .replaceAll(RegExp(r'\b(order\s*karo|order\s*kar\s*do|mangao|mangwa\s*do|mangwa|mangwana\s*hai|search\s*karo|dhundho|dhundh\s*do|dhundo|dhundh|chahiye|lao|dedo|de\s*do|ka\s*order|order|ek)\b'), ' ')
       .replaceAll(RegExp(r'\b(abhi|jaldi|please|bhai|yaar|hai|hain|h|mujhe|mere|lie|liye)\b'), ' ')
       .trim();
     return _clean(item) ?? '';
