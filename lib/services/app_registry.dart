@@ -148,6 +148,23 @@ class AppRegistry {
       return false;
     }
   }
+
+  /// Fires a VIEW intent for [url] PINNED into [packageName] — the Dart
+  /// equivalent of `adb shell am start -d <url> -p <pkg>`. This is how
+  /// https app-links open IN the app instead of the browser.
+  /// Returns false if the package can't handle the URL (caller falls back).
+  Future<bool> launchUrlInPackage(String url, String packageName) async {
+    try {
+      final ok = await _channel.invokeMethod<bool>('launchUrlInPackage', {
+        'url': url,
+        'package': packageName,
+      });
+      return ok ?? false;
+    } catch (e) {
+      _log.w('launchUrlInPackage failed for $packageName: $e');
+      return false;
+    }
+  }
 }
 
 class InstalledApp {

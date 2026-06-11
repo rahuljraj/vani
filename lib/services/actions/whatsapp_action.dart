@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:logger/logger.dart';
 import '../app_registry.dart';
 import '../contacts_service.dart';
+import '../tts_service.dart';
 
 class WhatsAppAction {
   final _log = Logger();
@@ -23,6 +24,8 @@ class WhatsAppAction {
         }
       }
       _log.w('No usable number for "$name" — opening WhatsApp home');
+      await TtsService.instance
+          .speak('$name ka number nahi mila — WhatsApp khol raha hoon.');
     }
     return await AppRegistry.instance.launchApp(_pkg);
   }
@@ -39,8 +42,11 @@ class WhatsAppAction {
         return true;
       }
     }
-    // Couldn't resolve number → can't prefill into a chat; open WhatsApp home.
+    // Couldn't resolve number → can't prefill into a chat; open WhatsApp home
+    // and say so honestly instead of pretending the draft is ready.
     _log.w('No number for "$contact" — opening WhatsApp home');
+    await TtsService.instance.speak(
+        '$contact ka number nahi mila — WhatsApp khol raha hoon, message khud bhejna.');
     return await AppRegistry.instance.launchApp(_pkg);
   }
 

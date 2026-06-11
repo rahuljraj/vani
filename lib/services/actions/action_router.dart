@@ -11,6 +11,7 @@ import 'call_action.dart';
 import '../../models/vani_intent.dart';
 import '../../core/constants.dart';
 import '../app_registry.dart';
+import '../app_deep_links.dart';
 
 
 class ActionRouter {
@@ -20,7 +21,7 @@ class ActionRouter {
   final _swiggy   = SwiggyAction();
   final _whatsapp = WhatsAppAction();
   final _call     = CallAction();
- 
+
  /// Rejects placeholder/junk contacts (e.g. Gemma's "your_phone_number",
   /// "contact_name") so we never dial or message a non-real target.
   /// Returns a usable contact, or '' if it isn't real.
@@ -49,7 +50,19 @@ class ActionRouter {
     return c;
   }
 
+  /// v1.1 reliability bar: every route ends in the right action OR a spoken
+  /// graceful failure. Nothing fails silently, nothing crashes the flow.
   Future<void> execute(VaniIntent intent) async {
+    try {
+      await _execute(intent);
+    } catch (e, st) {
+      _log.e('❌ Action failed: ${intent.actionCode}: $e\n$st');
+      await TtsService.instance
+          .speak('Kuch gadbad ho gayi. Dobara try karein?');
+    }
+  }
+
+  Future<void> _execute(VaniIntent intent) async {
     _log.d('Routing: ${intent.type} → ${intent.app} action=${intent.actionCode}');
 
     await TtsService.instance.speak(intent.speakText);
@@ -57,44 +70,29 @@ class ActionRouter {
 
     // Action-code-first routing (handles phone_dial which has no app)
     if (intent.actionCode == 'phone_dial') {
-      await _call.dial(_sanitizeContact(intent.parameters['contact'] ?? ''));
+      final ok = await _call.dial(_sanitizeContact(intent.parameters['contact'] ?? ''));
+      if (!ok) await _speakFail('Phone app nahi khul paya.');
       return;
     }
-     if (intent.actionCode == 'app_launch') {
-       final pkg = intent.parameters['package'] ?? '';
-     if (pkg.isNotEmpty) {
-        await AppRegistry.instance.launchApp(pkg);
-        }
-       return;
-      }
-      
-       // Generic deep-link search — fires URI directly, falls back to app_launch
-if (intent.actionCode == 'app_search_deeplink') {
-  final uriStr = intent.parameters['uri']     ?? '';
-  final pkg    = intent.parameters['package'] ?? '';
-  final name   = intent.parameters['name']    ?? 'app';
 
-  if (uriStr.isNotEmpty) {
-    final uri = Uri.parse(uriStr);
-    _log.i('🔎 Deep-link launch: $name → $uri');
-    try {
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (intent.actionCode == 'app_launch') {
+      final pkg  = intent.parameters['package'] ?? '';
+      final name = intent.parameters['name'] ?? 'App';
+      if (pkg.isEmpty) {
+        await _speakFail('Kaunsa app kholna hai, samajh nahi aaya.');
         return;
       }
-    } catch (e) {
-      _log.w('Deep-link failed, falling back to app_launch: $e');
+      final ok = await AppRegistry.instance.launchApp(pkg);
+      if (!ok) await _speakFail('$name nahi khul paya.');
+      return;
     }
-  }
 
-  // Fallback: just open the app
-  if (pkg.isNotEmpty) {
-    _log.i('🔎 Deep-link fallback: opening $name ($pkg)');
-    await AppRegistry.instance.launchApp(pkg);
-  }
-  return;
-}
-           
+    // Generic in-app search — https app-link PINNED into the package
+    // (same mechanism as the ADB-verified Blinkit/Swiggy paths).
+    if (intent.actionCode == 'app_search_deeplink') {
+      await _searchDeepLink(intent);
+      return;
+    }
 
     switch (intent.app) {
       case AppTarget.googleMaps: await _handleMaps(intent);
@@ -113,69 +111,144 @@ if (intent.actionCode == 'app_search_deeplink') {
     }
   }
 
+  Future<void> _speakFail(String message) =>
+      TtsService.instance.speak(message);
+
+  /// Deep-link search chain:
+  ///   1. Missing URI but query known → look up template (fixes the
+  ///      single-grocery-app path, which sets only package + query).
+  ///   2. Launch pinned into the package via the native bridge.
+  ///   3. Pin failed but app installed → open the app plain, tell the user
+  ///      honestly that they'll have to search inside.
+  ///   4. App missing and the link is https → browser as last resort.
+  Future<void> _searchDeepLink(VaniIntent intent) async {
+    final pkg   = intent.parameters['package'] ?? '';
+    final name  = intent.parameters['name'] ?? 'App';
+    final query = intent.parameters['query'] ?? '';
+    var uriStr  = intent.parameters['uri'] ?? '';
+
+    if (uriStr.isEmpty && pkg.isNotEmpty && query.isNotEmpty) {
+      uriStr = AppDeepLinks.searchUri(pkg, query)?.toString() ?? '';
+      if (uriStr.isNotEmpty) {
+        _log.i('🔎 Deep-link URI resolved at dispatch: $name → $uriStr');
+      }
+    }
+
+    if (uriStr.isNotEmpty && pkg.isNotEmpty) {
+      final ok = await AppRegistry.instance.launchUrlInPackage(uriStr, pkg);
+      if (ok) {
+        _log.i('🔎 Deep-link launch (pinned): $name → $uriStr');
+        return;
+      }
+      _log.w('🔎 Pinned deep-link failed for $name, falling back');
+    }
+
+    // Fallback: open the app plain — honest copy, no fake "dhundh raha hoon".
+    if (pkg.isNotEmpty) {
+      final ok = await AppRegistry.instance.launchApp(pkg);
+      if (ok) {
+        _log.i('🔎 Deep-link fallback: opened $name plain');
+        if (query.isNotEmpty) {
+          await TtsService.instance
+              .speak('$name khul gaya — $query wahan khud dhundhna.');
+        }
+        return;
+      }
+    }
+
+    // App not installed / unlaunchable → browser for https links.
+    if (uriStr.startsWith('https://')) {
+      final uri = Uri.parse(uriStr);
+      try {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+        _log.i('🔎 Deep-link browser fallback: $uri');
+        return;
+      } catch (e) {
+        _log.w('Browser fallback failed: $e');
+      }
+    }
+
+    await _speakFail('$name nahi khul paya.');
+  }
+
   Future<void> _handleMaps(VaniIntent intent) async {
     final p = intent.parameters;
+    bool ok;
     switch (intent.actionCode) {
       case 'maps_navigate':
         final dest = p['destination'] ?? '';
-        if (dest.isNotEmpty) await _maps.navigate(dest);
+        if (dest.isEmpty) { await _speakFail('Kahaan jaana hai, dobara bolein?'); return; }
+        ok = await _maps.navigate(dest);
       case 'maps_nearby':
         final type = p['place_type'] ?? '';
-        if (type.isNotEmpty) await _maps.findNearby(type);
+        if (type.isEmpty) { await _speakFail('Kya dhundhna hai, dobara bolein?'); return; }
+        ok = await _maps.findNearby(type);
       case 'maps_search':
         final q = p['query'] ?? p['destination'] ?? '';
-        if (q.isNotEmpty) await _maps.search(q);
+        if (q.isEmpty) { await _speakFail('Kya dhundhna hai, dobara bolein?'); return; }
+        ok = await _maps.search(q);
       default:
         final dest = p['destination'] ?? '';
-        if (dest.isNotEmpty) await _maps.navigate(dest);
+        if (dest.isEmpty) { await _speakFail('Kahaan jaana hai, dobara bolein?'); return; }
+        ok = await _maps.navigate(dest);
     }
+    if (!ok) await _speakFail('Maps nahi khul paya.');
   }
 
   Future<void> _handleBlinkit(VaniIntent intent) async {
     final item = intent.parameters['item']     ?? '';
     final qty  = intent.parameters['quantity'] ?? '';
-    if (item.isNotEmpty) await _blinkit.search(item, qty);
+    if (item.isEmpty) { await _speakFail('Kya order karna hai, dobara bolein?'); return; }
+    final ok = await _blinkit.search(item, qty);
+    if (!ok) await _speakFail('Blinkit nahi khul paya.');
   }
 
   Future<void> _handleSwiggy(VaniIntent intent) async {
     final item = intent.parameters['item'] ?? intent.parameters['query'] ?? '';
-    if (item.isNotEmpty) await _swiggy.search(item);
+    if (item.isEmpty) { await _speakFail('Kya order karna hai, dobara bolein?'); return; }
+    final ok = await _swiggy.search(item);
+    if (!ok) await _speakFail('Swiggy nahi khul paya.');
   }
 
-   Future<void> _handleZomato(VaniIntent intent) async {
-  final item = intent.parameters['item'] ?? intent.parameters['query'] ?? '';
-  if (item.isEmpty) return;
-  final enc = Uri.encodeComponent(item);
+  /// Zomato v1.1 — DEGRADED ON PURPOSE, honestly. The zomato:// search scheme
+  /// opens the app but ignores the query (verified Jun 2026), and no working
+  /// https app-link is known yet. So: open the app, no fake search promise
+  /// (speak copy says "khol raha hoon"). Web search only if app is missing.
+  /// Probe for a real link before re-enabling in-app search — see
+  /// docs/v1.1-device-checklist.md.
+  Future<void> _handleZomato(VaniIntent intent) async {
+    final opened = await AppRegistry.instance.launchApp(VaniPackages.zomato);
+    if (opened) return;
 
-  // Try Zomato app deep link first
-  final appUri = Uri.parse('zomato://search?keyword=$enc');
-  if (await canLaunchUrl(appUri)) {
-    await launchUrl(appUri, mode: LaunchMode.externalApplication);
-    return;
+    // App not installed → zomato.com search DOES work in the browser.
+    final item = intent.parameters['item'] ?? intent.parameters['query'] ?? '';
+    final uri = Uri.parse(item.isEmpty
+        ? 'https://www.zomato.com/'
+        : 'https://www.zomato.com/search?q=${Uri.encodeComponent(item)}');
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (e) {
+      _log.w('Zomato web fallback failed: $e');
+      await _speakFail('Zomato nahi khul paya.');
+    }
   }
 
-  // Fallback: web
-  await launchUrl(
-    Uri.parse('https://www.zomato.com/search?q=$enc'),
-    mode: LaunchMode.externalApplication,
-  );
-}
-   
-
-    
  Future<void> _handleWhatsApp(VaniIntent intent) async {
     final contact = _sanitizeContact(intent.parameters['contact'] ?? '');
     final message = intent.parameters['message'] ?? '';
+    final bool ok;
     if (message.isNotEmpty && contact.isNotEmpty) {
-      await _whatsapp.sendMessage(contact, message);
+      // Draft ONLY — message is pre-filled, the user taps send. Never auto-send.
+      ok = await _whatsapp.sendMessage(contact, message);
     } else {
-      await _whatsapp.open(contact);
+      ok = await _whatsapp.open(contact);
     }
+    if (!ok) await _speakFail('WhatsApp nahi khul paya. Install hai kya?');
   }
 
   Future<void> _handleYouTube(VaniIntent intent) async {
     final query = intent.parameters['query'] ?? '';
-    if (query.isEmpty) return;
+    if (query.isEmpty) { await _speakFail('Kya chalana hai, dobara bolein?'); return; }
     final enc = Uri.encodeComponent(query);
     final appUri = Uri.parse('vnd.youtube://results?search_query=$enc');
     if (await canLaunchUrl(appUri)) {
@@ -215,6 +288,6 @@ if (intent.actionCode == 'app_search_deeplink') {
     mode: LaunchMode.externalApplication,
   );
 }
-   
+
 
 }

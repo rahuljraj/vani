@@ -117,3 +117,37 @@ static String? resolve(String transcript) {
 - 15 min: apply 8-line fix, hot reload
 - 30 min: voice-test all 10 cases above
 - 5 min: commit + push
+
+## v1.1 implementation session — June 9, 2026 (cloud, no device)
+
+### Shipped on branch claude/friendly-hypatia-qd9kxp
+- Reliability pass: ActionRouter top-level guard — every route now ends in
+  right action OR spoken graceful fail. Honest corrections when contact/number
+  unresolved (Call + WhatsApp). Maps action fully guarded with 3-stage fallback.
+- ROOT-CAUSE FIX: `https` was missing from manifest <queries> — canLaunchUrl()
+  could silently return false on Android 11+ for wa.me drafts + every web
+  fallback. Likely the WhatsApp draft flakiness.
+- Grocery-no-app path: dead grofers:// → verified https app-link for Blinkit;
+  Zepto + BigBasket https templates added (UNVERIFIED — probe first);
+  app_search_deeplink now launches PINNED into the package (launchUrlInPackage)
+  and resolves the missing URI in the single-app case (was: opened app plain).
+- Explicit-Zomato degraded honestly: "Zomato khol raha hoon — X wahan khud
+  dhundhna". Dead zomato:// template removed; web search only when app missing.
+- Onboarding: privacy overclaim fixed (STT-online disclosed), accessibility
+  prominent disclosure added (Play policy), first-use example commands.
+- Play audit: docs/play-paperwork.md — MANAGE_EXTERNAL_STORAGE flagged as the
+  one submission blocker (model side-load); unused FOREGROUND_SERVICE +
+  RECEIVE_BOOT_COMPLETED removed from manifest; declaration drafts written.
+- Release signing scaffolded (key.properties pattern, falls back to debug);
+  version bumped to 1.1.0+2. docs/release-signing.md.
+- Fixed wrong Blinkit package in VaniPackages (com.blinkit.consumer →
+  com.grofers.customerapp) — apps screen installed-check was broken.
+- Offline STT (Vosk): full recipe in docs/offline-stt-vosk.md — deliberately
+  NOT wired in from a machine that can't compile-check; one device evening.
+
+### Before merge (device session — docs/v1.1-device-checklist.md)
+1. flutter pub get && flutter analyze  (cloud session had no Flutter!)
+2. ADB-probe Zepto + BigBasket app-links; flip UNVERIFIED comments
+3. Zomato dumpsys deep-link hunt (optional — honest copy ships either way)
+4. 3x reliability script: Call / WhatsApp draft / Navigate
+5. Fresh-install onboarding walkthrough
