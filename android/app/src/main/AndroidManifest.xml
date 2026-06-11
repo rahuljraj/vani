@@ -2,37 +2,35 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- ── Permissions ──────────────────────────── -->
+    <!-- Permissions -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- FOREGROUND_SERVICE + RECEIVE_BOOT_COMPLETED removed in the v1.1 Play
-         audit — nothing uses them yet. Re-add alongside the Gemma keep-warm
-         foreground service (Phase 2 cold-start fix). -->
+    <!-- FOREGROUND_SERVICE + RECEIVE_BOOT_COMPLETED were dropped in the v1.1
+         Play audit, re-added here for the Labs bubble / wake-word service
+         (both flagged OFF). Re-audit before release if a feature ships off. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.VIBRATE" />
-<<<<<<< HEAD
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
         tools:ignore="ScopedStorage" />
     <uses-permission android:name="android.permission.READ_CONTACTS" />
-    <!-- Floating bubble (Labs, default OFF): overlay button + special-use
-         FGS. Both need Play declarations — docs/play-bubble-permissions.md.
+    <!-- Floating bubble (Labs, default OFF): overlay button + special-use FGS.
+         Both need Play declarations - docs/play-bubble-permissions.md.
          Overlay permission is requested only after the in-app explainer. -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
-=======
-    
-    <uses-permission android:name="android.permission.READ_CONTACTS" />    
->>>>>>> main
     <uses-permission
         android:name="android.permission.BIND_ACCESSIBILITY_SERVICE"
         tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission" />
 
-
-
-    <!-- Required on Android 11+ for canLaunchUrl() to see custom schemes -->
+    <!-- Required on Android 11+ for canLaunchUrl() to see custom schemes.
+         NOTE: package names (in.swiggy.android etc.) are NOT schemes - grocery
+         and food go via https app-links forced into a package, so the https
+         query below is the one that actually matters. -->
     <queries>
         <intent>
             <action android:name="android.intent.action.VIEW" />
@@ -59,7 +57,7 @@
         <intent>
             <action android:name="android.intent.action.DIAL" />
             <data android:scheme="tel" />
-       </intent>
+        </intent>
     </queries>
 
     <application
@@ -68,7 +66,7 @@
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true">
 
-        <!-- ── Main Flutter Activity ────────────── -->
+        <!-- Main Flutter Activity -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -86,11 +84,10 @@
             </intent-filter>
         </activity>
 
-        <!-- ── Share target (Labs, default OFF) ──────────────────────
-             android:enabled="false": VANI shows up in the share sheet ONLY
-             after the user flips the Labs toggle (setComponentEnabledSetting).
-             VANI is a share TARGET — it receives only what the user
-             explicitly shares, never reads content on its own. -->
+        <!-- Share target (Labs, default OFF). android:enabled="false": VANI
+             shows in the share sheet ONLY after the user flips the Labs toggle
+             (setComponentEnabledSetting). VANI is a share TARGET - receives
+             only what the user explicitly shares, never reads on its own. -->
         <activity-alias
             android:name=".ShareTargetAlias"
             android:targetActivity=".MainActivity"
@@ -112,7 +109,7 @@
             </intent-filter>
         </activity-alias>
 
-        <!-- ── VANI Accessibility Service ───────── -->
+        <!-- VANI Accessibility Service -->
         <service
             android:name=".VaniAccessibilityService"
             android:exported="true"
@@ -126,7 +123,7 @@
                 android:resource="@xml/accessibility_service_config" />
         </service>
 
-        <!-- ── Quick Settings Tile (quick-launch, no extra perms) ── -->
+        <!-- Quick Settings Tile (quick-launch, no extra perms) -->
         <service
             android:name=".VaniTileService"
             android:exported="true"
@@ -138,7 +135,7 @@
             </intent-filter>
         </service>
 
-        <!-- ── Floating bubble (Labs, default OFF) ───────────────── -->
+        <!-- Floating bubble (Labs, default OFF) -->
         <service
             android:name=".VaniBubbleService"
             android:exported="false"
