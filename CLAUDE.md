@@ -15,6 +15,8 @@ Privacy-first, on-device voice AI assistant for Android. Hindi/English/Hinglish.
 | File | Purpose |
 |------|---------|
 | `lib/core/inference_config.dart` | TurboQuant toggle (`useTurboQuant`) |
+| `lib/core/stt_config.dart` | Offline Whisper STT config (`useLocalWhisper`, model, VAD thresholds) |
+| `lib/services/whisper_stt_service.dart` | On-device Whisper STT (whisper.cpp) — airplane-mode safe |
 | `lib/services/gemma_service.dart` | Gemma 4 E2B brain |
 | `lib/services/actions/action_router.dart` | Routes voice intents to apps |
 | `android/app/src/main/kotlin/com/vani/vani/VaniAccessibilityService.kt` | App control engine |

@@ -5,6 +5,9 @@ import 'package:speech_to_text/speech_to_text.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:logger/logger.dart';
 
+import '../core/stt_config.dart';
+import 'whisper_stt_service.dart';
+
 class AudioService {
   static AudioService? _instance;
   static AudioService get instance =>
@@ -21,17 +24,41 @@ class AudioService {
   bool   _gotFinalResult   = false;
   void Function()? _autoStopCallback;
 
+  // Local Whisper session state — true while the current mic session is
+  // running through the offline pipeline instead of the online recognizer.
+  bool _whisperSession = false;
+  void Function(String text)? _whisperOnResult;
+
   bool   get isRecording => _isRecording;
   String get lastWords   => _lastWords;
-  bool   get isListening => _stt.isListening;
+  bool   get isListening =>
+      _whisperSession ? WhisperSttService.instance.isRecording
+                      : _stt.isListening;
 
-  /// Start live Hindi STT.
-  /// [onResult] fires on every partial/final transcript.
-  /// [onAutoStop] fires when STT detects end-of-speech (after 2s silence).
+  /// Start STT. Prefers the fully offline Whisper pipeline (works in
+  /// airplane mode); falls back to the online en_IN recognizer only
+  /// while the Whisper model isn't on the device yet.
+  /// [onResult] fires with the transcript (Whisper: once, on stop).
+  /// [onAutoStop] fires when end-of-speech is detected (~2s silence).
   Future<bool> startSttListening({
     required void Function(String text) onResult,
     void Function()? onAutoStop,
   }) async {
+    if (SttConfig.useLocalWhisper && WhisperSttService.instance.isReady) {
+      _whisperOnResult = onResult;
+      final ok = await WhisperSttService.instance
+          .startListening(onAutoStop: onAutoStop);
+      _whisperSession = ok;
+      if (ok) {
+        _log.d('STT listening started (local Whisper, offline)');
+        return true;
+      }
+      // Whisper mic failed to start — fall through to the online path
+      _whisperOnResult = null;
+      _log.w('Whisper start failed — falling back to online STT');
+    }
+
+    // ── Legacy online recognizer (fallback only) ──
     // Always fully cancel any prior session
     if (_stt.isListening) {
       await _stt.cancel();
@@ -90,10 +117,19 @@ class AudioService {
   }
 
   /// Stop STT and return the final transcript.
-  /// Waits up to 1200ms for the final result to arrive after stop().
-  /// Returns empty string if no final result was received this session
+  /// Whisper path: stops the recorder and decodes locally (~1-2s).
+  /// Online path: waits up to 1200ms for the final result after stop().
+  /// Returns empty string if nothing usable was captured this session
   /// (prevents stale text from triggering a duplicate command).
   Future<String> stopSttListening() async {
+    if (_whisperSession) {
+      _whisperSession = false;
+      final text = await WhisperSttService.instance.stopAndTranscribe();
+      if (text.isNotEmpty) _whisperOnResult?.call(text);
+      _whisperOnResult = null;
+      return text;
+    }
+
     await _stt.stop();
 
     // Wait briefly for STT to deliver the final result.
@@ -123,6 +159,17 @@ class AudioService {
     _lastWords = '';
     _gotFinalResult = false;
     return result;
+  }
+
+  /// Abort the current session without transcribing (tap-cancel).
+  Future<void> cancelSttListening() async {
+    if (_whisperSession) {
+      _whisperSession  = false;
+      _whisperOnResult = null;
+      await WhisperSttService.instance.cancel();
+      return;
+    }
+    await stopSttListening();
   }
 
   // ── Raw recording (kept for future audio→Gemma) ──
@@ -169,6 +216,7 @@ class AudioService {
 
   Future<void> dispose() async {
     if (_stt.isListening) await _stt.cancel();
+    await WhisperSttService.instance.dispose();
     await _recorder.dispose();
   }
 }

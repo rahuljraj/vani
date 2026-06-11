@@ -45,7 +45,7 @@ routes to groceries, not food delivery.
 | UI | Flutter (Android) |
 | Fast path | FastIntentEngine (on-device rule matcher) |
 | On-device LLM | Gemma 3 1B via flutter_gemma (LiteRT) |
-| Speech-to-text | Online en_IN (v1.0); offline Vosk on roadmap |
+| Speech-to-text | On-device Whisper base via whisper.cpp/GGML (~148MB) — offline, airplane-mode OK |
 | Speech output | Android native TTS (hi-IN / en-IN) |
 | App control | Deep links / Android Intents + Accessibility Service |
 | State | Riverpod |
@@ -60,11 +60,10 @@ VANI is privacy-first, and honest about where that line sits today:
   are local. No cloud LLM.
 - **App actions are local** — deep links, intents, and the Accessibility
   Service act on apps you're already signed into.
-- **Speech-to-text in v1.0 uses an online service** (`en_IN`). This is the one
-  part that leaves the device, and it's disclosed in-app:
-  *"Runs on your device, except speech-to-text."*
-- **Offline STT (Vosk) is on the roadmap**, so the full pipeline can run in
-  airplane mode.
+- **Speech-to-text runs on the device** — Whisper (whisper.cpp, GGML base)
+  transcribes locally. The full mic → intent → action pipeline works in
+  airplane mode. The online `en_IN` recognizer remains only as a fallback
+  during the one-time model download window on first launch.
 - No account required. No analytics or tracking servers. No cloud API calls
   for understanding.
 
@@ -107,7 +106,8 @@ lib/
 │   ├── fast_intent_engine.dart   ← ~90% of commands, <50ms
 │   ├── gemma_service.dart        ← Gemma 3 1B fallback
 │   ├── intent_disambiguator.dart ← category-aware scoring
-│   ├── audio_service.dart        ← STT
+│   ├── audio_service.dart        ← STT routing (local-first)
+│   ├── whisper_stt_service.dart  ← offline Whisper STT + silence VAD
 │   ├── tts_service.dart          ← voice output
 │   └── actions/                  ← per-app routers (Maps, Blinkit, Swiggy, WhatsApp)
 └── screens/                  ← splash, onboarding, home, apps
@@ -127,7 +127,11 @@ Android device with 6GB+ RAM and USB debugging on.
 ```
 flutter pub get
 # Place the Gemma 3 1B LiteRT model on the device at /sdcard/Download/
-# (see flutter_gemma docs for the model file), then:
+# (see flutter_gemma docs for the model file).
+# Optional: side-load the Whisper STT model to skip its one-time download —
+#   /sdcard/Download/ggml-base.bin
+#   from https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin
+# Then:
 flutter run
 ```
 
@@ -140,7 +144,7 @@ On first launch, grant microphone and accessibility permissions in onboarding.
 | Phase | Focus |
 | --- | --- |
 | v1.0 | 5 core commands hardened · onboarding · signed APK · closed beta (10–20 users in Surat) |
-| v1.1 | Offline STT (Vosk, airplane-mode) · Zomato · auto-call · share-target ("ye raju ko bhejo") |
+| v1.1 | ~~Offline STT~~ ✅ shipped (Whisper, airplane-mode) · Zomato · auto-call · share-target ("ye raju ko bhejo") |
 | Later | Wake word · lower-RAM optimization · more vernacular languages |
 
 ---

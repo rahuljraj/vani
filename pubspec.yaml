@@ -17,6 +17,9 @@ dependencies:
   record: ^5.1.0
 
   # ── Speech To Text ──────────────────────────────
+  # On-device Whisper (whisper.cpp/GGML) — offline, airplane-mode safe
+  whisper_ggml: ^1.7.0
+  # Online en_IN recognizer — fallback only until the Whisper model lands
   speech_to_text: ^7.0.0
 
   # ── Text To Speech ──────────────────────────────

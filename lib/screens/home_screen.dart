@@ -5,6 +5,7 @@ import '../core/constants.dart';
 import '../services/audio_service.dart';
 import '../services/tts_service.dart';
 import '../services/gemma_service.dart';
+import '../services/whisper_stt_service.dart';
 import '../services/permission_service.dart';
 import '../services/actions/action_router.dart';
 import '../models/vani_intent.dart';
@@ -146,6 +147,16 @@ class _HomeScreenState extends State<HomeScreen>
       }
     }
 
+    // ── Offline voice model (Whisper) ─────────────
+    // One-time setup: copies from /sdcard/Download or downloads once
+    // (~148 MB). After this, speech-to-text is fully on-device and the
+    // mic works in airplane mode. Not fatal if it fails — the mic falls
+    // back to the online recognizer until the model lands.
+    if (mounted) {
+      setState(() => _loadingStep = 'Awaaz model taiyaar ho raha hai...');
+    }
+    await WhisperSttService.instance.initialize();
+
     if (mounted) setState(() {
       _loadingStep = 'Model load ho raha hai... (pehli baar thoda time lagega)';
       _isDownloading = true;
@@ -188,10 +199,10 @@ class _HomeScreenState extends State<HomeScreen>
   // ── Recording ───────────────────────────────────
   Future<void> _startListening() async {
   if (_state == VaniState.thinking) return;
-  // Intentionally NOT gated on _modelReady: STT (online) + FastIntentEngine
-  // handle ~90% of commands with no model. If a command falls through to
-  // Gemma before it's loaded, GemmaService.process() returns a graceful
-  // "AI load ho rahi hai" reply — no crash, no hang.
+  // Intentionally NOT gated on _modelReady: local Whisper STT +
+  // FastIntentEngine handle ~90% of commands with no LLM. If a command
+  // falls through to Gemma before it's loaded, GemmaService.process()
+  // returns a graceful "AI load ho rahi hai" reply — no crash, no hang.
   await TtsService.instance.stop();
 
   final ok = await AudioService.instance.startSttListening(
@@ -216,6 +227,10 @@ class _HomeScreenState extends State<HomeScreen>
   Future<void> _stopAndProcess() async {
     if (_state != VaniState.listening) return;
 
+    // Whisper decodes locally after stop (~1-2s) — show thinking,
+    // not a frozen "Listening..." while it runs.
+    setState(() => _state = VaniState.thinking);
+
     final text = await AudioService.instance.stopSttListening();
 
     if (text.trim().isEmpty) {
@@ -227,7 +242,7 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Future<void> _cancelListening() async {
-    await AudioService.instance.stopSttListening();
+    await AudioService.instance.cancelSttListening();
     if (mounted) setState(() => _state = VaniState.idle);
   }
 
