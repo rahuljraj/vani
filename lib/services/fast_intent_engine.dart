@@ -599,7 +599,7 @@ static VaniIntent? _searchInApp(String t) {
   /// Recover the bare item from a command with no app name ("biryani mangwa do").
   static String _pendingItem(String t) {
     var item = t
-      .replaceAll(RegExp(r'\b(order\s*karo|order\s*kar\s*do|mangao|mangwa\s*do|mangwana\s*hai|search\s*karo|dhundho|dhundh\s*do|dhundo|dhundh|chahiye|lao|dedo|de\s*do|ka\s*order|ek)\b'), ' ')
+     .replaceAll(RegExp(r'\b(order\s*karo|order\s*kar\s*do|mangao|mangwa\s*do|mangwa|mangwana\s*hai|search\s*karo|dhundho|dhundh\s*do|dhundo|dhundh|chahiye|lao|dedo|de\s*do|ka\s*order|order|ek)\b'), ' ')
       .replaceAll(RegExp(r'\b(abhi|jaldi|please|bhai|yaar|hai|hain|h|mujhe|mere|lie|liye)\b'), ' ')
       .trim();
     return _clean(item) ?? '';
