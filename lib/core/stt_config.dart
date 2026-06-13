@@ -10,7 +10,7 @@ class SttConfig {
   /// Master switch: true = on-device Whisper STT.
   /// The app falls back to the online en_IN recognizer ONLY while the
   /// Whisper model isn't on the device yet (first-launch download window).
-  static const bool useLocalWhisper = true;
+ static const bool useLocalWhisper = false;
 
   /// Multilingual `base` (~148 MB) handles Hinglish well on mid-range
   /// phones (~1-2s decode for a short command in release mode).

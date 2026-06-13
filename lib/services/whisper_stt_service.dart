@@ -34,7 +34,8 @@ class WhisperSttService {
   StreamSubscription<Amplitude>? _ampSub;
   Timer?   _maxUtteranceTimer;
   String?  _wavPath;
-  bool     _heardSpeech   = false;
+  bool     _heardSpeech = false;
+  bool     _vadActive     = false;
   DateTime _lastSpeechAt  = DateTime.now();
   DateTime _recordStartAt = DateTime.now();
   void Function()? _onAutoStop;
@@ -123,9 +124,21 @@ class WhisperSttService {
       _recordStartAt = DateTime.now();
       _lastSpeechAt  = _recordStartAt;
 
-      _ampSub = _recorder
-          .onAmplitudeChanged(SttConfig.vadInterval)
-          .listen(_onAmplitude);
+    // Defensive VAD wiring: the record package's amplitude stream is
+      // single-subscription and throws on this device when the recorder
+      // is reused. VAD (silence auto-stop + speech gate) is an
+      // optimisation — never let it break the actual recording/decode.
+      await _ampSub?.cancel();
+      _ampSub = null;
+      _vadActive = false;
+      try {
+        _ampSub = _recorder
+            .onAmplitudeChanged(SttConfig.vadInterval)
+            .listen(_onAmplitude);
+        _vadActive = true;
+      } catch (e) {
+        _log.w('VAD unavailable, decode gated by length only: $e');
+      }
       _maxUtteranceTimer = Timer(SttConfig.maxUtterance, _fireAutoStop);
 
       _log.d('Whisper recording started (16kHz mono WAV)');
@@ -188,7 +201,11 @@ class WhisperSttService {
         _log.d('Whisper: recording too short, skipping decode');
         return '';
       }
-      if (!_heardSpeech) {
+      
+      // Only trust the speech gate when VAD actually ran. With VAD down,
+      // the length check above already filters empty captures — decode
+      // and let Whisper judge, rather than assuming silence.
+      if (_vadActive && !_heardSpeech) {
         _log.d('Whisper: no speech detected this session, skipping decode');
         return '';
       }
