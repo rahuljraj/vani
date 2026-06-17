@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import '../core/constants.dart';
+import '../core/inference_config.dart';
 import '../services/audio_service.dart';
 import '../services/tts_service.dart';
 import '../services/gemma_service.dart';
@@ -101,7 +102,20 @@ class _HomeScreenState extends State<HomeScreen>
     });
   }
 
-  Future<void> _initModel() async {
+ Future<void> _initModel() async {
+    // Beta (FastIntent-only): skip ALL model download/load so a cold install
+    // is usable instantly. Mic + online STT + FastIntentEngine need no model.
+    if (!InferenceConfig.gemmaEnabled) {
+      if (mounted) setState(() {
+        _modelReady       = false;   // mic is no longer gated on this
+        _modelError       = false;
+        _modelErrorReason = '';
+        _isDownloading    = false;
+        _loadingStep      = '';
+      });
+      return;
+    }
+
     if (mounted) setState(() {
       _modelError       = false;
       _modelErrorReason = '';
@@ -347,6 +361,7 @@ class _HomeScreenState extends State<HomeScreen>
     }
     if (_modelError) return 'Error — Retry karein';
     if (_loadingStep.isNotEmpty) return _loadingStep;
+   if (!InferenceConfig.gemmaEnabled) return VaniStrings.holdToSpeak;
     return _modelReady ? VaniStrings.holdToSpeak : VaniStrings.modelLoading;
   }
 
@@ -536,7 +551,7 @@ class _HomeScreenState extends State<HomeScreen>
   Widget _buildMicButton() {
     final isListening = _state == VaniState.listening;
     final isThinking  = _state == VaniState.thinking;
-    final disabled    = isThinking || !_modelReady;
+    final disabled    = isThinking;   // beta: mic not gated on model load
 
     return GestureDetector(
      onTapDown:   disabled ? null : (_) => _startListening(),
