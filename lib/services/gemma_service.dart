@@ -275,7 +275,9 @@ IMPORTANT:
         type: IntentType.chat,
         app: AppTarget.none,
         parameters: {},
-        speakText: 'AI load ho rahi hai. Thodi der mein dobara bolein.',
+        speakText: InferenceConfig.gemmaEnabled
+            ? 'AI load ho rahi hai. Thodi der mein dobara bolein.'
+            : 'Samajh nahi aaya, dobara bolein.',
         actionCode: 'none',
       );
     }

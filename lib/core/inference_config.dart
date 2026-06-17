@@ -9,6 +9,11 @@ class InferenceConfig {
 
   static const bool useTurboQuant = false;
 
+  // Beta switch. false = FastIntent-only: no model download/load, so a
+  // stranger can cold-install and reach a voice command with zero setup.
+  // Flip to true in v1.1 to re-enable the on-device Gemma fallback.
+  static const bool gemmaEnabled = false;
+
   // ── Active model: Gemma 3 1B (litertlm, ~557 MB) ─
 
   // Filename must match the download URL's actual filename
