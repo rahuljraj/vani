@@ -27,6 +27,12 @@ android {
         jvmTarget = "17"
     }
 
+    // BuildConfig.DEBUG gates the accessibility node-tree probe in
+    // VaniAccessibilityService (AGP 8+ disables BuildConfig by default).
+    buildFeatures {
+        buildConfig true
+    }
+
     defaultConfig {
         applicationId "com.vani.vani"
         minSdk 26

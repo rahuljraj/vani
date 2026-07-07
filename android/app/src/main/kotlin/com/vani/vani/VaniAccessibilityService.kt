@@ -1,6 +1,11 @@
 package com.vani.vani
 
 import android.accessibilityservice.AccessibilityService
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.Build
 import android.os.Bundle
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
@@ -14,6 +19,13 @@ class VaniAccessibilityService : AccessibilityService() {
         var pendingAction: String? = null
         var pendingData: String? = null
 
+        // Debug-only screen-reading probe (never registered in release builds).
+        // Trigger while the target app is in the foreground:
+        //   adb shell am broadcast -a com.vani.vani.DEBUG_DUMP_TREE -p com.vani.vani
+        // Read the dump:
+        //   adb logcat -s VANI-PROBE
+        const val ACTION_DEBUG_DUMP_TREE = "com.vani.vani.DEBUG_DUMP_TREE"
+
         // Supported app package names
         const val PKG_BLINKIT   = "com.blinkit.consumer"
         const val PKG_SWIGGY    = "in.swiggy.android"
@@ -24,9 +36,25 @@ class VaniAccessibilityService : AccessibilityService() {
         const val PKG_FLIPKART  = "com.flipkart.android"
     }
 
+    private val debugDumpReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            debugDumpNodeTree()
+        }
+    }
+
     override fun onServiceConnected() {
         instance = this
         android.util.Log.d("VANI", "✅ Accessibility Service Connected")
+
+        if (BuildConfig.DEBUG) {
+            val filter = IntentFilter(ACTION_DEBUG_DUMP_TREE)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(debugDumpReceiver, filter, Context.RECEIVER_EXPORTED)
+            } else {
+                registerReceiver(debugDumpReceiver, filter)
+            }
+            android.util.Log.d("VANI", "🔎 Debug dump receiver registered ($ACTION_DEBUG_DUMP_TREE)")
+        }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
@@ -156,11 +184,52 @@ class VaniAccessibilityService : AccessibilityService() {
         pendingData   = null
     }
 
+    // ── Debug: Screen-Reading Probe ──────────────
+    // Walks the current window's node tree and logs every node so we can
+    // verify (via logcat) whether target apps expose restaurant names,
+    // ratings, etc. as readable accessibility nodes.
+    private fun debugDumpNodeTree() {
+        if (!BuildConfig.DEBUG) return
+        val root = rootInActiveWindow
+        if (root == null) {
+            android.util.Log.w("VANI-PROBE", "🔎 dump requested but rootInActiveWindow is null")
+            return
+        }
+        android.util.Log.d(
+            "VANI-PROBE",
+            "🔎 ===== DUMP START pkg=${root.packageName} ====="
+        )
+        val count = debugDumpNode(root, 0, 0)
+        android.util.Log.d("VANI-PROBE", "🔎 ===== DUMP END ($count nodes) =====")
+    }
+
+    private fun debugDumpNode(node: AccessibilityNodeInfo, depth: Int, index: Int): Int {
+        val indent = ".".repeat(depth)
+        android.util.Log.d(
+            "VANI-PROBE",
+            "🔎 $indent[$depth:$index] class=${node.className} " +
+                "text=\"${node.text}\" desc=\"${node.contentDescription}\" " +
+                "id=${node.viewIdResourceName}"
+        )
+        var count = 1
+        for (i in 0 until node.childCount) {
+            node.getChild(i)?.let { count += debugDumpNode(it, depth + 1, i) }
+        }
+        return count
+    }
+
     override fun onInterrupt() {
         android.util.Log.d("VANI", "Accessibility Service Interrupted")
     }
 
     override fun onDestroy() {
+        if (BuildConfig.DEBUG) {
+            try {
+                unregisterReceiver(debugDumpReceiver)
+            } catch (_: IllegalArgumentException) {
+                // Receiver was never registered (service died before connect).
+            }
+        }
         instance = null
         super.onDestroy()
     }
