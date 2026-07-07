@@ -1,12 +1,21 @@
-# VANI — Voice AI Native Interface
+# VANI — Voice AI Native Interface for India
 
-Privacy-first, on-device voice AI assistant for Android. Hindi/English/Hinglish. Zero cloud processing.
+Voice AI assistant for budget Android users in India. Hindi / English / Hinglish.
+Privacy-oriented: the assistant's reasoning and personal memory stay on the device;
+speech-to-text currently uses Google STT (en-IN), disclosed to the user.
+Fully-on-device STT is a v1.1 goal, not yet shipped.
+
+Founder: Rahul Raj (solo, Surat)
 
 ## Tech Stack
 
 - **UI**: Flutter (Dart)
-- **On-device AI**: Gemma 3 1B via `flutter_gemma`
+- **On-device AI**: Gemma 3 1B via `flutter_gemma` — built in but FLAG-GATED OFF
+  (`gemmaEnabled = false`) for the lean cold-install beta. Handles the complex ~10%
+  of queries when re-enabled.
+- **Intent engine**: FastIntentEngine (pattern matching) handles ~90% of queries
 - **Voice**: Android microphone + `record` package → Android native TTS (hi-IN / en-IN)
+- **STT**: Google STT, online, en-IN locale (Hinglish in Latin script)
 - **App control**: Android Accessibility Service (`VaniAccessibilityService.kt`)
 - **App launch**: Android Intents via `url_launcher`
 
@@ -14,9 +23,11 @@ Privacy-first, on-device voice AI assistant for Android. Hindi/English/Hinglish.
 
 | File | Purpose |
 |------|---------|
-| `lib/core/inference_config.dart` | TurboQuant toggle (`useTurboQuant`) |
-| `lib/services/gemma_service.dart` | Gemma 4 E2B brain |
+| `lib/core/inference_config.dart` | Model / inference configuration |
+| `lib/services/gemma_service.dart` | Gemma 3 1B brain (gated off in beta) |
+| `lib/services/fast_intent_engine.dart` | Rule-based intent engine (the 90% path) |
 | `lib/services/actions/action_router.dart` | Routes voice intents to apps |
+| `lib/screens/home_screen.dart` | Main UI |
 | `android/app/src/main/kotlin/com/vani/vani/VaniAccessibilityService.kt` | App control engine |
 | `android/app/src/main/AndroidManifest.xml` | Permissions + service registration |
 
@@ -27,95 +38,70 @@ flutter pub get          # install dependencies
 flutter analyze          # static analysis (run before every commit)
 flutter clean            # clean build artifacts
 flutter run              # run on connected Android device (USB debugging required)
-flutter build apk        # build release APK
+flutter build apk        # build debug/release APK
+flutter build appbundle  # build AAB for Play Store
 ```
+
+## Current Status (accurate as of 07 Jul 2026)
+
+- Code: github.com/rahuljraj/vani — `main` is stable
+- **Beta mode: FastIntent-only.** Gemma is gated off (`gemmaEnabled = false`) so cold
+  installs reach voice commands without downloading a model.
+- **NO live "AI load ho rahi hai" bug.** It was resolved by shipping FastIntent-only
+  mode (commit fd71536). Do NOT edit `gemma_service.dart` to fix a load hang — the
+  load path does not run in the beta.
+- STT: Google STT (online). On-device Whisper was tested 07 Jul 2026 and FAILED
+  ("mummy ji ko call karo" → "mamamna chico pariparom", plus too slow on budget chips).
+  Shelved to v1.1.
+- **5 working voice commands**: call, WhatsApp (contact + message), navigation,
+  app-launch (any installed app), food/grocery order (Blinkit / Swiggy deep link)
+- Live work: screen-reading probe (`DEBUG_DUMP_TREE` in VaniAccessibilityService)
+  → restaurant-recommendation feature
+
+## Model Configuration (when Gemma is re-enabled)
+
+- Active model: Gemma 3 1B (`.task` format, ~530 MB)
+- <!-- TODO(verify): confirm the on-device model path against inference_config.dart.
+     Docs have conflicted between /sdcard/Download/ and the app-scoped
+     /sdcard/Android/data/com.vani.vani/files/ — set this to whatever the code declares. -->
+- Do NOT change `modelFileName`, `modelDownloadUrl`, `modelSizeBytes`, or
+  `maxContextTokens` without asking — the 1B choice was deliberate (4–6x latency win).
 
 ## Git Workflow
 
-- `main` is the stable branch
-- One branch per feature: `feat/<feature-name>`
-- Commit format: `feat: <description>` / `fix: <description>` / `refactor: <description>`
-- PR per feature — keep them small and reviewable
-- No stacked PRs currently; each feature branch targets `main`
+- `main` is stable; one branch per feature: `feat/<feature-name>`
+- Commit format: `feat:` / `fix:` / `refactor:` / `chore:` / `docs:`
+- **Never `git add .` or `git add -A`** — targeted adds only, name specific files
+- Commit before switching branches; push at end of every session
+- Verify a change worked by function/behavior (logcat, adb), not by commit stats
+
+## When Fixing Bugs
+
+- Always show the exact file path
+- Probe actual file contents before editing — never assume API behavior
+- Prefer targeted edits; full-file replacement only when the change genuinely
+  spans the file
+- Verify with emoji-filtered logcat (`🎤|🚀|🎯|🔎|🐛|❌`) or adb before declaring fixed
+- (Windows PowerShell) run `chcp 65001` before logcat filtering for UTF-8
+
+## When Building Features
+
+- Reference VANI's vision: Hinglish-native, privacy-oriented India assistant
+- Stay focused on the MVP: 5 working voice commands
+- Defer complex features to Phase 2
+- Sequence risky native changes last, so there's always a shippable version underneath
 
 ## Platform Notes
 
-- **No web UI** — this is an Android app. gstack browse features do not apply.
-- **Windows dev environment** — gstack browse binary (macOS arm64) will not run here.
-- Testing requires a physical Android device with USB debugging enabled (6GB+ RAM recommended).
+- Android app, no web UI. Windows dev environment.
+- Testing requires a physical Android device with USB debugging (test device:
+  OnePlus Nord CE 2 Lite 5G, arm64-v8a, package `com.vani.vani`)
 
-## Skill Routing
+## Open Strategic Questions (resolve when fresh, not mid-session)
 
-When the user's request matches an available skill, invoke it via the Skill tool.
-
-Key routing rules:
-- Bugs, errors, crashes, "why is this broken" → invoke `/investigate`
-- Code review, "check my changes", "review this" → invoke `/review`
-- Create PR, push, ship a feature, "land this" → invoke `/ship`
-- Architecture decisions, "does this design make sense" → invoke `/plan-eng-review`
-- Brainstorm features, "what should we build next" → invoke `/office-hours`
-- Save session progress, "checkpoint this" → invoke `/context-save`
-- Resume a previous session, "where was I" → invoke `/context-restore`
-- Weekly retro, "what did we ship" → invoke `/retro`
-- Security audit, permissions review → invoke `/cso`
-
-## Current Model Configuration — DO NOT CHANGE WITHOUT ASKING
-
-- Active model: **Gemma 3 1B** (litertlm format, ~557 MB)
-- Located on device at: `/sdcard/Download/gemma_model.task`
-- Previous model (deprecated): Gemma 4 E2B (2.4 GB) — do not revert
-- Switching to 1B reduced latency 4–6x. This was deliberate.
-
-If asked to debug Gemma loading:
-- Do NOT change `modelFileName`, `modelDownloadUrl`, `modelSizeBytes`, or `maxContextTokens` in `inference_config.dart`
-- Do NOT change `ModelFileType.task` in `gemma_service.dart`
-- The user has the model file already; download path is dormant
-- If you think there's an inconsistency, STOP and ask before editing
-
-## v0.1 MVP Shipped (May 17, 2026)
-
-**Working features:**
-- Gemma 3 1B on-device LLM fallback (.task format, 557MB, /sdcard/Download/gemma_model.task)
-- STT in en_IN locale (Hinglish in Latin script)
-- FastIntentEngine: 9 matchers + brand normalization + IntentDisambiguator
-- InstalledAppsScanner: detects all user apps (98 on test device)
-- Generic voice launcher: opens any installed app by name
-- Smart Blinkit deep link search
-- Confirmed working: LinkedIn, Instagram, WhatsApp, Blinkit voice commands
-
-**Architecture:**
-- Privacy-first, fully on-device
-- CLI pattern over MCP
-- Toggle-based app permissions
-- Tagged: v0.1-mvp-voice-launch
-
-**Known gaps (Phase 2):**
-- TTS blocks app launch (~1.6s avoidable latency)
-- Cold start = 17s (foreground service to keep Gemma warm)
-- No wake word yet (Picovoice planned for v1.1)
-- Per-app deep links only for Blinkit so far (LinkedIn jobs, Spotify play, Uber book queued)
-
-
-   ## Strategic Update — Swiggy MCP Discovery (May 17, 2026, late night)
-
-   **VANI's real moat:** Voice-to-MCP bridge for Indian apps.
-
-   Swiggy launched 3 MCP servers + Builders Club in April 2026:
-   - mcp.swiggy.com/food (restaurants, ordering)
-   - mcp.swiggy.com/im (Instamart groceries)
-   - mcp.swiggy.com/dineout (table bookings)
-   - 18+ API tools, COD orders supported, free dineout bookings
-
-   Apply at: mcp.swiggy.com/builders
-
-   **Updated thesis:** As Indian app ecosystem ships MCP (Swiggy first, others to follow),
-   VANI becomes the consumer-facing voice + Hinglish layer on top.
-
-   **Phase 2 priority change:**
-   - Was: deep-link search for top 5 apps
-   - Now: deep-link search PLUS Swiggy Builders Club application
-   - If accepted: full conversational ordering via MCP (pav bhaji flow becomes real)
-
-   **What's still gated by regulation:** UPI payment auto-initiation. RBI rules apply.
-   Approach: VANI navigates to checkout screen, user enters UPI PIN manually. That's the line.
-   
+- <!-- TODO(verify): wake word approach. Picovoice/Porcupine free tier expired
+     30 Jun 2026; openWakeWord is the intended path. Interim: register VANI as the
+     default Android assistant (long-press power). Confirm and update. -->
+- <!-- TODO(decide): "CLI pattern over MCP" vs Swiggy MCP integration. Swiggy shipped
+     MCP servers and Gemini now does third-party app actions. This is a real
+     positioning call — resolve deliberately. -->
