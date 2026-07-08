@@ -10,9 +10,6 @@ dependencies:
   flutter:
     sdk: flutter
 
-  # ── On-Device AI (Gemma 4 E2B LiteRT-LM) ───────
-  flutter_gemma: ^0.14.0
-
   # ── Audio Recording ─────────────────────────────
   record: ^5.1.0
 
