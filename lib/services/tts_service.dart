@@ -31,6 +31,7 @@ class TtsService {
       await _tts.setSpeechRate(0.85); // Slightly slower, clearer
       await _tts.setVolume(1.0);
       await _tts.setPitch(1.05);      // Slightly warmer tone
+      await _tts.awaitSpeakCompletion(true);
 
       _tts.setStartHandler(()      => _isSpeaking = true);
       _tts.setCompletionHandler(() => _isSpeaking = false);
