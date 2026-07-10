@@ -19,13 +19,15 @@ class ConfirmationService {
 
   final _log = Logger();
 
-  static const _yesWords = {
+ static const _yesWords = {
     'haan', 'han', 'ha', 'haa', 'yes', 'yeah', 'ok', 'okay',
     'karo', 'kardo', 'theek', 'thik', 'bilkul', 'sahi', 'correct',
+    'हाँ', 'हां', 'हा', 'करो', 'ठीक', 'बिल्कुल', 'सही', 'ओके',
   };
   static const _noWords = {
-    'nahi', 'nahin', 'nhi', 'no', 'nope', 'mat', 'cancel',
-    'rehne', 'ruko', 'band', 'rukja', 'stop',
+    'nahi', 'nahin', 'nhi', 'no', 'nope', 'naa', 'na', 'mat', 'cancel',
+    'rehne', 'ruko', 'band', 'rukja', 'stop', 'badme', 'baad',
+    'नहीं', 'नही', 'ना', 'मत', 'रुको', 'बंद', 'रहने', 'बाद',
   };
 
   /// Speak [question], listen ~6s for a short reply, classify it.
@@ -45,8 +47,8 @@ class ConfirmationService {
         final text = await AudioService.instance.stopSttListening();
         if (!completer.isCompleted) completer.complete(text);
       },
-      listenFor: const Duration(seconds: 6),
-      pauseFor: const Duration(seconds: 2),
+      listenFor: const Duration(seconds: 8),
+      pauseFor: const Duration(seconds: 4),
     );
 
     if (!started) {
@@ -55,7 +57,7 @@ class ConfirmationService {
     }
 
     final heard = await completer.future.timeout(
-      const Duration(seconds: 9),
+      const Duration(seconds: 12),
       onTimeout: () => '',
     );
 
