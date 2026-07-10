@@ -63,11 +63,14 @@ class GemmaService {
     }
 
     _log.w('No fast match — model not available in beta build');
+    final heard = userText.trim();
     return VaniIntent(
       type: IntentType.chat,
       app: AppTarget.none,
       parameters: {},
-      speakText: 'Samajh nahi aaya, dobara bolein.',
+      speakText: heard.isNotEmpty
+          ? 'Maine suna: "$heard" — dobara bolein?'
+          : 'Kuch sunayi nahi diya, dobara bolein?',
       actionCode: 'none',
     );
   }
