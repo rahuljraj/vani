@@ -12,7 +12,7 @@ import '../../models/vani_intent.dart';
 import '../../core/constants.dart';
 import '../app_registry.dart';
 import '../app_deep_links.dart';
-
+import '../confirmation_service.dart';
 
 class ActionRouter {
   final _log      = Logger();
@@ -70,11 +70,21 @@ class ActionRouter {
 
     // Action-code-first routing (handles phone_dial which has no app)
     if (intent.actionCode == 'phone_dial') {
-      final ok = await _call.dial(_sanitizeContact(intent.parameters['contact'] ?? ''));
+      final contact = _sanitizeContact(intent.parameters['contact'] ?? '');
+      if (contact.isEmpty) {
+        await _speakFail('Kis ko call karna hai, dobara bolein?');
+        return;
+      }
+      final answer =
+          await ConfirmationService.instance.confirm('$contact ko call karun?');
+      if (answer != ConfirmResult.yes) {
+        await TtsService.instance.speak('Theek hai, cancel kar diya.');
+        return;
+      }
+      final ok = await _call.dial(contact);
       if (!ok) await _speakFail('Phone app nahi khul paya.');
       return;
     }
-
     if (intent.actionCode == 'app_launch') {
       final pkg  = intent.parameters['package'] ?? '';
       final name = intent.parameters['name'] ?? 'App';

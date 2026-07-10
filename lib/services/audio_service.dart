@@ -28,9 +28,11 @@ class AudioService {
   /// Start live Hindi STT.
   /// [onResult] fires on every partial/final transcript.
   /// [onAutoStop] fires when STT detects end-of-speech (after 2s silence).
-  Future<bool> startSttListening({
+ Future<bool> startSttListening({
     required void Function(String text) onResult,
     void Function()? onAutoStop,
+    Duration listenFor = const Duration(seconds: 15),
+    Duration pauseFor  = const Duration(seconds: 4),
   }) async {
     // Always fully cancel any prior session
     if (_stt.isListening) {
@@ -76,8 +78,8 @@ class AudioService {
         }
       },
       localeId: 'en_IN',
-      listenFor: const Duration(seconds: 15),
-      pauseFor: const Duration(seconds: 4),
+      listenFor: listenFor,
+      pauseFor: pauseFor,
       listenOptions: SpeechListenOptions(
         cancelOnError: true,
         partialResults: true,
