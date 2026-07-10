@@ -77,11 +77,39 @@ class ActionRouter {
       }
       final answer =
           await ConfirmationService.instance.confirm('$contact ko call karun?');
-      if (answer != ConfirmResult.yes) {
+      if (answer == ConfirmResult.yes) {
+        final ok = await _call.dial(contact);
+        if (!ok) await _speakFail('Phone app nahi khul paya.');
+        return;
+      }
+      if (answer == ConfirmResult.unclear) {
+        // Honest copy — VANI did NOT understand, so it must not claim to.
+        await TtsService.instance
+            .speak('Samajh nahi aaya, isliye call cancel kar diya.');
+        return;
+      }
+      // Explicit "no" → exactly ONE correction round. No loops, no recursion;
+      // every path below ends in a dial or a spoken cancel.
+      final reply = await ConfirmationService.instance
+          .askOnce('Theek hai — kis ko call karun? Ya "cancel" bolein.');
+      if (reply.trim().isEmpty ||
+          ConfirmationService.instance.containsNo(reply)) {
+        await TtsService.instance.speak('Koi baat nahi, cancel kar diya.');
+        return;
+      }
+      final newContact = _sanitizeContact(reply);
+      if (newContact.isEmpty) {
+        await TtsService.instance
+            .speak('Yeh naam samajh nahi aaya, cancel kar diya.');
+        return;
+      }
+      final again = await ConfirmationService.instance
+          .confirm('$newContact ko call karun?');
+      if (again != ConfirmResult.yes) {
         await TtsService.instance.speak('Theek hai, cancel kar diya.');
         return;
       }
-      final ok = await _call.dial(contact);
+      final ok = await _call.dial(newContact);
       if (!ok) await _speakFail('Phone app nahi khul paya.');
       return;
     }

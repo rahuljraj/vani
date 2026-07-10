@@ -66,6 +66,48 @@ class ConfirmationService {
     return result;
   }
 
+  /// Speak [question], do one listen (same windows as confirm()), and return
+  /// the raw transcript — '' on timeout or when STT is unavailable.
+  Future<String> askOnce(String question) async {
+    await TtsService.instance.speak(question);
+    // Small buffer so the mic doesn't catch the tail of our own TTS.
+    await Future.delayed(const Duration(milliseconds: 300));
+
+    final completer = Completer<String>();
+
+    final started = await AudioService.instance.startSttListening(
+      onResult: (text) {
+        if (!completer.isCompleted) completer.complete(text);
+      },
+      onAutoStop: () async {
+        if (completer.isCompleted) return;
+        final text = await AudioService.instance.stopSttListening();
+        if (!completer.isCompleted) completer.complete(text);
+      },
+      listenFor: const Duration(seconds: 8),
+      pauseFor: const Duration(seconds: 4),
+    );
+
+    if (!started) {
+      _log.w('🎯 askOnce: STT unavailable → empty transcript');
+      return '';
+    }
+
+    final heard = await completer.future.timeout(
+      const Duration(seconds: 12),
+      onTimeout: () => '',
+    );
+    _log.i('🎯 askOnce heard: "$heard"');
+    return heard;
+  }
+
+  /// True if [heard] contains any no-word — lets callers detect a spoken
+  /// cancel inside a longer reply without duplicating the word set.
+  bool containsNo(String heard) {
+    final words = heard.toLowerCase().trim().split(RegExp(r'\s+'));
+    return words.any(_noWords.contains);
+  }
+
   ConfirmResult _classify(String heard) {
     final words = heard.toLowerCase().trim().split(RegExp(r'\s+'));
     if (words.every((w) => w.isEmpty)) return ConfirmResult.unclear;
