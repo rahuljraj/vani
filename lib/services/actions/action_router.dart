@@ -50,6 +50,23 @@ class ActionRouter {
     return c;
   }
 
+  static const _trailingConnectors = {
+    'ko', 'ka', 'ki', 'call', 'karo', 'karna', 'lagao', 'phone', 'kro',
+  };
+
+  /// Correction replies come as "<name> ko" / "<name> ko call karo" — the
+  /// trailing connectors depress contact-match scores and double the "ko"
+  /// in the re-confirm question. Strips them repeatedly from the END only,
+  /// never the middle, and never down to an empty string.
+  String _stripTrailingConnectors(String raw) {
+    final words = raw.trim().split(RegExp(r'\s+'));
+    while (words.length > 1 &&
+        _trailingConnectors.contains(words.last.toLowerCase())) {
+      words.removeLast();
+    }
+    return words.join(' ');
+  }
+
   /// v1.1 reliability bar: every route ends in the right action OR a spoken
   /// graceful failure. Nothing fails silently, nothing crashes the flow.
   Future<void> execute(VaniIntent intent) async {
@@ -97,7 +114,7 @@ class ActionRouter {
         await TtsService.instance.speak('Koi baat nahi, cancel kar diya.');
         return;
       }
-      final newContact = _sanitizeContact(reply);
+      final newContact = _sanitizeContact(_stripTrailingConnectors(reply));
       if (newContact.isEmpty) {
         await TtsService.instance
             .speak('Yeh naam samajh nahi aaya, cancel kar diya.');
