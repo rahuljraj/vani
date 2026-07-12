@@ -101,11 +101,65 @@ class ConfirmationService {
     return heard;
   }
 
+  /// Speak [announcement], then hold a SHORT objection window (~2.5s) and
+  /// return the raw transcript — '' on silence/timeout/unavailable.
+  /// Barge-in after announce: silence means consent, so the window is short.
+  /// Use confirm()/askOnce() where an explicit answer is required.
+  Future<String> objectionWindow(String announcement) async {
+    await TtsService.instance.speak(announcement);
+    // Small buffer so the mic doesn't catch the tail of our own TTS.
+    await Future.delayed(const Duration(milliseconds: 300));
+
+    final completer = Completer<String>();
+
+    final started = await AudioService.instance.startSttListening(
+      onResult: (text) {
+        if (!completer.isCompleted) completer.complete(text);
+      },
+      onAutoStop: () async {
+        if (completer.isCompleted) return;
+        final text = await AudioService.instance.stopSttListening();
+        if (!completer.isCompleted) completer.complete(text);
+      },
+      listenFor: const Duration(milliseconds: 2500),
+      pauseFor: const Duration(milliseconds: 1500),
+    );
+
+    if (!started) {
+      _log.w('🎯 objectionWindow: STT unavailable → no objection');
+      return '';
+    }
+
+    final heard = await completer.future.timeout(
+      const Duration(seconds: 6),
+      onTimeout: () => '',
+    );
+    _log.i('🎯 objectionWindow heard: "$heard"');
+    return heard;
+  }
+
   /// True if [heard] contains any no-word — lets callers detect a spoken
   /// cancel inside a longer reply without duplicating the word set.
   bool containsNo(String heard) {
     final words = heard.toLowerCase().trim().split(RegExp(r'\s+'));
     return words.any(_noWords.contains);
+  }
+
+  /// True if [heard] contains any yes-word — mirror of containsNo, for
+  /// classifying an objection-window transcript.
+  bool containsYes(String heard) {
+    final words = heard.toLowerCase().trim().split(RegExp(r'\s+'));
+    return words.any(_yesWords.contains);
+  }
+
+  /// Removes every no-word from [heard], wherever it appears, so a redirect
+  /// like "nahi mummy ko" yields the intended name for contact resolution.
+  String stripNoWords(String heard) {
+    return heard
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((w) => !_noWords.contains(w.toLowerCase()))
+        .join(' ');
   }
 
   ConfirmResult _classify(String heard) {
