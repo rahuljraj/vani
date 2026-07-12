@@ -128,7 +128,7 @@ class ConfirmationService {
         if (!completer.isCompleted) completer.complete(text);
       },
       listenFor: const Duration(seconds: 8),
-      pauseFor: const Duration(milliseconds: 1200),
+      pauseFor: const Duration(milliseconds: 2000),
     );
 
     if (!started) {
