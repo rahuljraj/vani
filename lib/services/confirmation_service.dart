@@ -101,9 +101,14 @@ class ConfirmationService {
     return heard;
   }
 
-  /// Speak [announcement], then hold a SHORT objection window (~2.5s) and
-  /// return the raw transcript — '' on silence/timeout/unavailable.
-  /// Barge-in after announce: silence means consent, so the window is short.
+  /// Speak [announcement], then hold a short objection window and return the
+  /// raw transcript — '' on silence/timeout/unavailable.
+  /// Extend-on-speech: pure silence ends the session after ~1.2s (pauseFor),
+  /// but once the user starts speaking the window stays open while speech
+  /// continues, hard-capped at 8s (listenFor), so an utterance like
+  /// "nahi Amitji ko" is never cut off mid-word. The transcript resolves
+  /// only on the FINAL result (AudioService forwards finals only; partials
+  /// never reach the completer), or on auto-stop's drained transcript.
   /// Use confirm()/askOnce() where an explicit answer is required.
   Future<String> objectionWindow(String announcement) async {
     await TtsService.instance.speak(announcement);
@@ -111,6 +116,7 @@ class ConfirmationService {
     await Future.delayed(const Duration(milliseconds: 300));
 
     final completer = Completer<String>();
+    final sw = Stopwatch()..start();
 
     final started = await AudioService.instance.startSttListening(
       onResult: (text) {
@@ -121,20 +127,20 @@ class ConfirmationService {
         final text = await AudioService.instance.stopSttListening();
         if (!completer.isCompleted) completer.complete(text);
       },
-      listenFor: const Duration(milliseconds: 2500),
-      pauseFor: const Duration(milliseconds: 1500),
+      listenFor: const Duration(seconds: 8),
+      pauseFor: const Duration(milliseconds: 1200),
     );
 
     if (!started) {
-      _log.w('🎯 objectionWindow: STT unavailable → no objection');
+      _log.w('🎯 Objection window: STT unavailable → no objection');
       return '';
     }
 
     final heard = await completer.future.timeout(
-      const Duration(seconds: 6),
+      const Duration(seconds: 12),
       onTimeout: () => '',
     );
-    _log.i('🎯 objectionWindow heard: "$heard"');
+    _log.i('🎯 Objection window: heard "$heard" after ${sw.elapsedMilliseconds}ms');
     return heard;
   }
 
