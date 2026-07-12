@@ -171,8 +171,6 @@ flutter build appbundle  # build AAB for Play Store
 
 ---
 
-## Deferred / Do NOT surface publicly
 
-- Full conversational cart dialog (multi-turn add-items) -> Phase 2+
-- VANI-to-VANI user knowledge sharing -> Phase 3, needs heavy consent design
-- Git-history scrub for any past moat references -> deliberate future task, not rushed
+
+
