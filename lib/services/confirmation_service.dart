@@ -101,11 +101,71 @@ class ConfirmationService {
     return heard;
   }
 
+  /// Speak [announcement], then hold a short objection window and return the
+  /// raw transcript — '' on silence/timeout/unavailable.
+  /// Extend-on-speech: pure silence ends the session after ~1.2s (pauseFor),
+  /// but once the user starts speaking the window stays open while speech
+  /// continues, hard-capped at 8s (listenFor), so an utterance like
+  /// "nahi Amitji ko" is never cut off mid-word. The transcript resolves
+  /// only on the FINAL result (AudioService forwards finals only; partials
+  /// never reach the completer), or on auto-stop's drained transcript.
+  /// Use confirm()/askOnce() where an explicit answer is required.
+  Future<String> objectionWindow(String announcement) async {
+    await TtsService.instance.speak(announcement);
+    // Small buffer so the mic doesn't catch the tail of our own TTS.
+    await Future.delayed(const Duration(milliseconds: 300));
+
+    final completer = Completer<String>();
+    final sw = Stopwatch()..start();
+
+    final started = await AudioService.instance.startSttListening(
+      onResult: (text) {
+        if (!completer.isCompleted) completer.complete(text);
+      },
+      onAutoStop: () async {
+        if (completer.isCompleted) return;
+        final text = await AudioService.instance.stopSttListening();
+        if (!completer.isCompleted) completer.complete(text);
+      },
+      listenFor: const Duration(seconds: 8),
+      pauseFor: const Duration(milliseconds: 2000),
+    );
+
+    if (!started) {
+      _log.w('🎯 Objection window: STT unavailable → no objection');
+      return '';
+    }
+
+    final heard = await completer.future.timeout(
+      const Duration(seconds: 12),
+      onTimeout: () => '',
+    );
+    _log.i('🎯 Objection window: heard "$heard" after ${sw.elapsedMilliseconds}ms');
+    return heard;
+  }
+
   /// True if [heard] contains any no-word — lets callers detect a spoken
   /// cancel inside a longer reply without duplicating the word set.
   bool containsNo(String heard) {
     final words = heard.toLowerCase().trim().split(RegExp(r'\s+'));
     return words.any(_noWords.contains);
+  }
+
+  /// True if [heard] contains any yes-word — mirror of containsNo, for
+  /// classifying an objection-window transcript.
+  bool containsYes(String heard) {
+    final words = heard.toLowerCase().trim().split(RegExp(r'\s+'));
+    return words.any(_yesWords.contains);
+  }
+
+  /// Removes every no-word from [heard], wherever it appears, so a redirect
+  /// like "nahi mummy ko" yields the intended name for contact resolution.
+  String stripNoWords(String heard) {
+    return heard
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((w) => !_noWords.contains(w.toLowerCase()))
+        .join(' ');
   }
 
   ConfirmResult _classify(String heard) {

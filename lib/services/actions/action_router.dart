@@ -82,49 +82,56 @@ class ActionRouter {
   Future<void> _execute(VaniIntent intent) async {
     _log.d('Routing: ${intent.type} → ${intent.app} action=${intent.actionCode}');
 
-    await TtsService.instance.speak(intent.speakText);
-    await Future.delayed(VaniDurations.speechStartDelay);
+    // phone_dial announces inside its objection window; speaking speakText
+    // here too would say the same "<contact> ko call kar raha hoon" twice.
+    if (intent.actionCode != 'phone_dial') {
+      await TtsService.instance.speak(intent.speakText);
+      await Future.delayed(VaniDurations.speechStartDelay);
+    }
 
     // Action-code-first routing (handles phone_dial which has no app)
     if (intent.actionCode == 'phone_dial') {
+      final svc = ConfirmationService.instance;
       final contact = _sanitizeContact(intent.parameters['contact'] ?? '');
       if (contact.isEmpty) {
         await _speakFail('Kis ko call karna hai, dobara bolein?');
         return;
       }
-      final answer =
-          await ConfirmationService.instance.confirm('$contact ko call karun?');
-      if (answer == ConfirmResult.yes) {
+
+      // Announce-then-objection-window ("barge-in after announce"):
+      // silence = consent, a no-word cancels or redirects. Max TWO
+      // announcements (original + one redirect), never a third. Every path
+      // ends in a dial or a spoken cancel.
+      final heard1 =
+          await svc.objectionWindow('$contact ko call kar raha hoon.');
+      if (!svc.containsNo(heard1)) {
+        if (heard1.trim().isNotEmpty && !svc.containsYes(heard1)) {
+          _log.i(
+              '🎯 Objection window heard unclassifiable: "$heard1" → proceeding');
+        }
         final ok = await _call.dial(contact);
         if (!ok) await _speakFail('Phone app nahi khul paya.');
         return;
       }
-      if (answer == ConfirmResult.unclear) {
-        // Honest copy — VANI did NOT understand, so it must not claim to.
-        await TtsService.instance
-            .speak('Samajh nahi aaya, isliye call cancel kar diya.');
-        return;
-      }
-      // Explicit "no" → exactly ONE correction round. No loops, no recursion;
-      // every path below ends in a dial or a spoken cancel.
-      final reply = await ConfirmationService.instance
-          .askOnce('Theek hai — kis ko call karun? Ya "cancel" bolein.');
-      if (reply.trim().isEmpty ||
-          ConfirmationService.instance.containsNo(reply)) {
-        await TtsService.instance.speak('Koi baat nahi, cancel kar diya.');
-        return;
-      }
-      final newContact = _sanitizeContact(_stripTrailingConnectors(reply));
+
+      // Objection. "nahi <name> ko" is a redirect; a bare no cancels.
+      final newContact = _sanitizeContact(
+          _stripTrailingConnectors(svc.stripNoWords(heard1)));
       if (newContact.isEmpty) {
-        await TtsService.instance
-            .speak('Yeh naam samajh nahi aaya, cancel kar diya.');
+        await TtsService.instance.speak('Theek hai, call cancel kar diya.');
         return;
       }
-      final again = await ConfirmationService.instance
-          .confirm('$newContact ko call karun?');
-      if (again != ConfirmResult.yes) {
-        await TtsService.instance.speak('Theek hai, cancel kar diya.');
+
+      // Second (and last) announcement for the redirected name.
+      final heard2 =
+          await svc.objectionWindow('$newContact ko call kar raha hoon.');
+      if (svc.containsNo(heard2)) {
+        await TtsService.instance.speak('Theek hai, call cancel kar diya.');
         return;
+      }
+      if (heard2.trim().isNotEmpty && !svc.containsYes(heard2)) {
+        _log.i(
+            '🎯 Objection window heard unclassifiable: "$heard2" → proceeding');
       }
       final ok = await _call.dial(newContact);
       if (!ok) await _speakFail('Phone app nahi khul paya.');
