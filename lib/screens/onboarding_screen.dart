@@ -34,9 +34,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     });
   }
 
-  Future<void> _requestMic() async {
+ Future<void> _requestMic() async {
     setState(() => _isChecking = true);
     final granted = await PermissionService.instance.requestMicrophone();
+    // Phone asked alongside mic. Denial is NOT a blocker — VANI degrades to
+    // dialer pre-fill — so the step gate stays on the mic result only.
+    await PermissionService.instance.requestPhone();
     setState(() {
       _micGranted  = granted;
       _isChecking  = false;

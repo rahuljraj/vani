@@ -53,6 +53,14 @@ class MainActivity : FlutterActivity() {
                     startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
                     result.success(true)
                 }
+                "openAssistantSettings" -> {
+                    try {
+                        startActivity(Intent("android.settings.VOICE_INPUT_SETTINGS"))
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.success(false)
+                    }
+                }
                 "setPendingAction" -> {
                     val action = call.argument<String>("action")
                     val data = call.argument<String>("data")

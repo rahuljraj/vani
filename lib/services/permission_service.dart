@@ -23,6 +23,19 @@ class PermissionService {
   Future<bool> get hasMicrophone async =>
     await Permission.microphone.isGranted;
 
+    // ── Phone (CALL_PHONE) ─────────────────────────
+  // Needed for ACTION_CALL. Without it CallAction falls back to opening the
+  // dialer pre-filled — VANI still works, the user just taps green. Asked
+  // during onboarding so the system dialog never lands mid voice command.
+  Future<bool> requestPhone() async {
+    final status = await Permission.phone.request();
+    _log.d('Phone: $status');
+    return status.isGranted;
+  }
+
+  Future<bool> get hasPhone async =>
+    await Permission.phone.isGranted;
+
   // ── Accessibility Service ──────────────────────
   Future<bool> get hasAccessibility async {
     try {
@@ -41,6 +54,18 @@ class PermissionService {
       await _channel.invokeMethod('openAccessibilitySettings');
     } catch (e) {
       _log.e('Open accessibility settings error: $e');
+    }
+  }
+
+
+  // ── Assistant slot ─────────────────────────────
+  // Cannot be requested — the assistant is a user choice in a secure setting.
+  // We can only take them to the screen; they select VANI themselves.
+  Future<void> openAssistantSettings() async {
+    try {
+      await _channel.invokeMethod('openAssistantSettings');
+    } catch (e) {
+      _log.e('Open assistant settings error: $e');
     }
   }
 
@@ -85,7 +110,8 @@ class PermissionService {
   // ── Check All Required Permissions ────────────
   Future<Map<String, bool>> checkAllPermissions() async {
     return {
-      'microphone':   await hasMicrophone,
+      'microphone':    await hasMicrophone,
+      'phone':         await hasPhone,
       'accessibility': await hasAccessibility,
     };
   }
