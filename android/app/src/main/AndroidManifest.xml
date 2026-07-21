@@ -104,6 +104,38 @@
             </intent-filter>
         </service>
 
+
+         <!-- ── Assistant slot (long-press power / assist gesture) ── -->
+        <service
+            android:name=".VaniVoiceInteractionService"
+            android:exported="true"
+            android:label="VANI"
+            android:permission="android.permission.BIND_VOICE_INTERACTION">
+            <intent-filter>
+                <action android:name="android.service.voice.VoiceInteractionService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.voice_interaction"
+                android:resource="@xml/vani_interaction_service" />
+        </service>
+
+        <service
+            android:name=".VaniVoiceInteractionSessionService"
+            android:exported="true"
+            android:permission="android.permission.BIND_VOICE_INTERACTION" />
+
+        <service
+            android:name=".VaniRecognitionService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.speech.RecognitionService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.speech"
+                android:resource="@xml/vani_recognition_service" />
+        </service>
+
+
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
