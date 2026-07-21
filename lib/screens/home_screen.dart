@@ -261,6 +261,10 @@ class _HomeScreenState extends State<HomeScreen>
       _state    = VaniState.speaking;
       _response = intent.speakText;
     });
+     
+     _router.onStatus = (text) {
+      if (mounted) setState(() => _response = text);
+    };
 
     await _router.execute(intent);
 
