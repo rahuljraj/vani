@@ -7,6 +7,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.provider.Settings
 import android.provider.ContactsContract
+import android.net.Uri
 
 class MainActivity : FlutterActivity() {
 
@@ -85,14 +86,36 @@ class MainActivity : FlutterActivity() {
                     val url = call.argument<String>("url") ?: ""
                     val pkg = call.argument<String>("package") ?: ""
                     try {
-                        val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
                         intent.setPackage(pkg)
                         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                         startActivity(intent)
                         result.success(true)
                     } catch (e: Exception) {
-                        // Package can't handle this URL → let Dart fall back.
+                        // Package can't handle this URL -> let Dart fall back.
                         result.success(false)
+                    }
+                }
+                "placeCall" -> {
+                    val number = call.argument<String>("number") ?: ""
+                    if (number.isEmpty()) {
+                        result.success(false)
+                    } else {
+                        try {
+                            val intent = Intent(
+                                Intent.ACTION_CALL,
+                                Uri.parse("tel:$number")
+                            )
+                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            startActivity(intent)
+                            result.success(true)
+                        } catch (e: SecurityException) {
+                            // CALL_PHONE not granted -> let Dart fall back to dialer.
+                            result.success(false)
+                        } catch (e: Exception) {
+                            // No telephony / no handler -> let Dart fall back.
+                            result.success(false)
+                        }
                     }
                 }
                 "getContacts" -> {
@@ -128,7 +151,7 @@ class MainActivity : FlutterActivity() {
                 }
             }
         } catch (e: Exception) {
-            // Permission not granted or query failed → return empty list.
+            // Permission not granted or query failed -> return empty list.
         }
         return contacts
     }

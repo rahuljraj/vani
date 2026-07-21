@@ -11,6 +11,7 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     
     <uses-permission android:name="android.permission.READ_CONTACTS" />    
+    <uses-permission android:name="android.permission.CALL_PHONE" />
     <uses-permission
         android:name="android.permission.BIND_ACCESSIBILITY_SERVICE"
         tools:ignore="ProtectedPermissions" />
@@ -47,6 +48,10 @@
             <action android:name="android.intent.action.DIAL" />
             <data android:scheme="tel" />
        </intent>
+       <intent>
+            <action android:name="android.intent.action.CALL" />
+            <data android:scheme="tel" />
+        </intent>
     </queries>
 
     <application
