@@ -93,26 +93,38 @@ class ContactsService {
     final q = spokenName.toLowerCase().trim();
     final qn = _norm(q);
 
-    // Stage 1: normalized exact — "mummy ji" → "Mummyji", "mummy" → "Mummy".
+   // Stage 1: normalized exact — "mummy ji" → "Mummyji", "mummy" → "Mummy".
+    // Exact is unambiguous by definition: if two rows normalize identically
+    // they are the same saved name, so the first is as good as any.
     for (final c in _contacts) {
       if (_norm(c.name) == qn) {
         _log.d('📇 exact: "$q" → ${c.name}');
         return c.number;
       }
     }
-    // Stage 2: substring — "raju" → "Raju Bhaisa".
-    for (final c in _contacts) {
-      if (c.name.toLowerCase().contains(q)) {
-        _log.d('📇 substring: "$q" → ${c.name}');
-        return c.number;
-      }
+
+    // Stages 2 & 3: substring — "raju" → "Raju Bhaisa".
+    //
+    // These used to return on the FIRST hit. With auto-dial live that means
+    // "raju" silently rings whichever of "Raju" / "Raju Bhaisa" the contacts
+    // query happened to return first — a wrong call with no signal to the
+    // user. So: collect every hit and commit only when they resolve to ONE
+    // distinct name. Multiple rows of the same person are fine (a contact
+    // with two numbers, or synced from two accounts). Two different people
+    // means the input was genuinely ambiguous — fall through to fuzzy, which
+    // has its own margin guard, and let VANI say "nahi mila" if that also
+    // can't separate them. Honest dead-end > wrong call.
+    final subHits = _contacts
+        .where((c) => c.name.toLowerCase().contains(q) || _norm(c.name).contains(qn))
+        .toList();
+    final subNames = subHits.map((c) => _norm(c.name)).toSet();
+    if (subNames.length == 1) {
+      _log.d('📇 substring: "$q" → ${subHits.first.name}');
+      return subHits.first.number;
     }
-    // Stage 3: normalized substring.
-    for (final c in _contacts) {
-      if (_norm(c.name).contains(qn)) {
-        _log.d('📇 norm-substring: "$q" → ${c.name}');
-        return c.number;
-      }
+    if (subNames.length > 1) {
+      _log.w('📇 substring ambiguous for "$q": '
+          '${subHits.map((c) => c.name).toSet().join(", ")} — deferring to fuzzy');
     }
     
     // Score by DISTINCT name: contacts with multiple numbers (or synced from
