@@ -168,6 +168,33 @@ class ConfirmationService {
         .join(' ');
   }
 
+  /// Returns the redirect target from an objection transcript: everything
+  /// AFTER the last no-word. "mummy ji ko nahi raju bhai ko" -> "raju bhai ko".
+  ///
+  /// stripNoWords() only removes the negation, which concatenates the
+  /// rejected name with the intended one ("mummy ji ko raju bhai ko") and
+  /// resolves to nobody. The correction is what FOLLOWS the "nahi" — the
+  /// words before it are the target being rejected.
+  ///
+  /// Returns '' when nothing follows the negation ("nahi", "nahi rehne do"
+  /// after connector-stripping) — a bare cancel, not a redirect. Callers
+  /// must treat '' as cancel and NOT dial.
+  String redirectTarget(String heard) {
+    final words = heard.trim().split(RegExp(r'\s+'));
+    var lastNoIndex = -1;
+    for (var i = 0; i < words.length; i++) {
+      if (_noWords.contains(words[i].toLowerCase())) lastNoIndex = i;
+    }
+    if (lastNoIndex == -1) return '';
+    final after = words
+        .sublist(lastNoIndex + 1)
+        .where((w) => !_noWords.contains(w.toLowerCase()))
+        .join(' ')
+        .trim();
+    _log.d('🎯 Redirect target: "$heard" -> "$after"');
+    return after;
+  }
+
   ConfirmResult _classify(String heard) {
     final words = heard.toLowerCase().trim().split(RegExp(r'\s+'));
     if (words.every((w) => w.isEmpty)) return ConfirmResult.unclear;

@@ -22,6 +22,22 @@ class ActionRouter {
   final _whatsapp = WhatsAppAction();
   final _call     = CallAction();
 
+   
+   /// Set by the UI so mid-action changes (redirect, cancel) reach the screen.
+  /// Everything after execute() starts — objection window, redirect, cancel —
+  /// happens inside the router, so without this the display stays frozen on
+  /// the text the screen set before calling us.
+  void Function(String)? onStatus;
+
+  /// Speak [message] and push the same text to the screen, so voice and
+  /// display never disagree.
+  Future<void> _say(String message) async {
+    onStatus?.call(message);
+    await TtsService.instance.speak(message);
+  }
+
+
+
  /// Rejects placeholder/junk contacts (e.g. Gemma's "your_phone_number",
   /// "contact_name") so we never dial or message a non-real target.
   /// Returns a usable contact, or '' if it isn't real.
@@ -115,18 +131,20 @@ class ActionRouter {
       }
 
       // Objection. "nahi <name> ko" is a redirect; a bare no cancels.
+     // Objection. "nahi <name> ko" is a redirect; a bare no cancels.
       final newContact = _sanitizeContact(
-          _stripTrailingConnectors(svc.stripNoWords(heard1)));
+          _stripTrailingConnectors(svc.redirectTarget(heard1)));
       if (newContact.isEmpty) {
-        await TtsService.instance.speak('Theek hai, call cancel kar diya.');
+        await _say('Theek hai, call cancel kar diya.');
         return;
       }
 
       // Second (and last) announcement for the redirected name.
+      onStatus?.call('$newContact ko call kar raha hoon.');
       final heard2 =
           await svc.objectionWindow('$newContact ko call kar raha hoon.');
       if (svc.containsNo(heard2)) {
-        await TtsService.instance.speak('Theek hai, call cancel kar diya.');
+        await _say('Theek hai, call cancel kar diya.');
         return;
       }
       if (heard2.trim().isNotEmpty && !svc.containsYes(heard2)) {
@@ -172,9 +190,8 @@ class ActionRouter {
         );
     }
   }
-
-  Future<void> _speakFail(String message) =>
-      TtsService.instance.speak(message);
+  Future<void> _speakFail(String message) => _say(message);
+ 
 
   /// Deep-link search chain:
   ///   1. Missing URI but query known → look up template (fixes the
