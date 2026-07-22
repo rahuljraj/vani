@@ -126,13 +126,33 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         );
       case 3:
         // First-use prompt: hand the user a command that works on try #1.
-        return _stepContent(
-          emoji:    '✅',
-          title:    'Sab ready hai!',
-          subtitle: 'Button dabaiye aur boliye —',
-          detail:   '"Blinkit pe doodh dhundho"\n'
-                    '"Mummy ko call karo"\n'
-                    '"Station ka rasta dikhao"',
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _stepContent(
+              emoji:    '✅',
+              title:    'Sab ready hai!',
+              subtitle: 'Button dabaiye aur boliye —',
+              detail:   '"Blinkit pe doodh dhundho"\n'
+                        '"Mummy ko call karo"\n'
+                        '"Station ka rasta dikhao"',
+            ),
+            const SizedBox(height: 24),
+            // Optional: set VANI as the long-press assistant. Skippable —
+            // VANI works fully without it.
+            TextButton(
+              onPressed: () =>
+                  PermissionService.instance.openAssistantSettings(),
+              child: const Text(
+                'VANI ko long-press assistant banayein (optional)',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color:    VaniColors.accent,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+          ],
         );
       default:
         return const SizedBox();
