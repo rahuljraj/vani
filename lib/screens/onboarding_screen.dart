@@ -144,11 +144,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               onPressed: () =>
                   PermissionService.instance.openAssistantSettings(),
               child: const Text(
-                'VANI ko long-press assistant banayein (optional)',
+                'Power button se VANI kholni hai?\n'
+                "Settings → 'Default digital assistant app' → VANI",
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color:    VaniColors.accent,
                   fontSize: 13,
+                  height:   1.5,
                 ),
               ),
             ),
