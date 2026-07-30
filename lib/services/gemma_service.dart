@@ -10,6 +10,7 @@
 import 'package:logger/logger.dart';
 import '../models/vani_intent.dart';
 import 'fast_intent_engine.dart';
+import 'miss_log.dart';
 
 class GemmaService {
   static GemmaService? _instance;
@@ -63,6 +64,8 @@ class GemmaService {
     }
 
     _log.w('No fast match — model not available in beta build');
+    // Fire-and-forget: never let logging block or break the voice path.
+    MissLog.instance.record(userText);
     final heard = userText.trim();
     return VaniIntent(
       type: IntentType.chat,
