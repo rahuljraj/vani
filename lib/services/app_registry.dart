@@ -21,6 +21,8 @@ class AppRegistry {
   List<InstalledApp> get apps => _apps;
   bool get isLoaded => _loaded;
 
+  Future<void>? _loadFuture;
+
   /// Scans device for all installed user apps. Call once on app launch.
   Future<void> loadInstalledApps() async {
     try {
@@ -34,6 +36,17 @@ class AppRegistry {
     } catch (e) {
       _log.e('Failed to scan apps: $e');
     }
+  }   
+
+
+  /// Idempotent. Starts the scan if needed, awaits it if in flight.
+  /// Retries on a previous failure rather than caching an empty result.
+  Future<void> ensureLoaded() async {
+    if (_loaded) return;
+    _loadFuture ??= loadInstalledApps().whenComplete(() {
+      if (!_loaded) _loadFuture = null;
+    });
+    await _loadFuture;
   }
 
   /// Strips spaces, dots, dashes, underscores for normalized comparison.

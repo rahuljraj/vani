@@ -10,6 +10,7 @@ import '../services/permission_service.dart';
 import '../services/actions/action_router.dart';
 import '../models/vani_intent.dart';
 import '../services/app_deep_links.dart';
+import '../services/app_registry.dart';
 
 enum VaniState { idle, listening, thinking, speaking, error }
 
@@ -241,6 +242,10 @@ class _HomeScreenState extends State<HomeScreen>
       _response      = '';
       _pendingChoice = null;   // dismiss any stale choice on a new command
     });
+
+    // Registry load is no longer awaited in main() — make sure it's ready
+    // before any intent that resolves an app name.
+    await AppRegistry.instance.ensureLoaded();
 
     final intent = await GemmaService.instance.process(text);
 
