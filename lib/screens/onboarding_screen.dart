@@ -15,8 +15,9 @@ class OnboardingScreen extends StatefulWidget {
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
 
-  int  _step          = 0; // 0=welcome 1=mic 2=accessibility 3=ready
+  int  _step          = 0; // 0=welcome 1=mic 2=phone 3=accessibility 4=ready
   bool _micGranted    = false;
+  bool _phoneGranted  = false;
   bool _accGranted    = false;
   bool _isChecking    = false;
 
@@ -29,21 +30,33 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Future<void> _checkExistingPermissions() async {
     final perms = await PermissionService.instance.checkAllPermissions();
     setState(() {
-      _micGranted  = perms['microphone']    ?? false;
-      _accGranted  = perms['accessibility'] ?? false;
+      _micGranted   = perms['microphone']    ?? false;
+      _phoneGranted = perms['phone']         ?? false;
+      _accGranted   = perms['accessibility'] ?? false;
     });
   }
 
- Future<void> _requestMic() async {
+  Future<void> _requestMic() async {
     setState(() => _isChecking = true);
     final granted = await PermissionService.instance.requestMicrophone();
-    // Phone asked alongside mic. Denial is NOT a blocker — VANI degrades to
-    // dialer pre-fill — so the step gate stays on the mic result only.
-    await PermissionService.instance.requestPhone();
     setState(() {
       _micGranted  = granted;
       _isChecking  = false;
       if (granted) _step = 2;
+    });
+  }
+
+  // CALL_PHONE gets its own step. Two runtime dialogs fired back-to-back are
+  // silently dropped by the platform — the phone dialog never appeared when it
+  // was requested immediately after the mic one. Denial is NOT a blocker:
+  // VANI degrades to opening the dialer pre-filled, so we advance either way.
+  Future<void> _requestPhone() async {
+    setState(() => _isChecking = true);
+    final granted = await PermissionService.instance.requestPhone();
+    setState(() {
+      _phoneGranted = granted;
+      _isChecking   = false;
+      _step         = 3;
     });
   }
 
@@ -53,7 +66,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       await Future.delayed(const Duration(seconds: 1));
       final ok = await PermissionService.instance.hasAccessibility;
       if (ok) {
-        setState(() { _accGranted = true; _step = 3; });
+        setState(() { _accGranted = true; _step = 4; });
         return;
       }
     }
@@ -114,6 +127,18 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           granted:  _micGranted,
         );
       case 2:
+        // CALL_PHONE is the most sensitive permission VANI requests. State the
+        // benefit and the fallback plainly — this text is also what Play
+        // review reads as the in-app justification.
+        return _stepContent(
+          emoji:    '📞',
+          title:    'Phone Calls',
+          subtitle: '"Papa ko call karo" — VANI seedha\ncall laga degi.',
+          detail:   'Bina is permission ke VANI sirf dialer\nkholegi, aur aapko green button\ndabana padega.\n'
+                    'VANI aapke call records kabhi nahi\npadhti.',
+          granted:  _phoneGranted,
+        );
+      case 3:
         // Prominent disclosure (Play accessibility policy): say exactly what
         // the service does and does not do, before sending to settings.
         return _stepContent(
@@ -124,7 +149,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     'Settings mein VANI Assistant "On" karein.',
           granted:  _accGranted,
         );
-      case 3:
+      case 4:
         // First-use prompt: hand the user a command that works on try #1.
         return Column(
           mainAxisSize: MainAxisSize.min,
@@ -262,11 +287,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ? () => setState(() => _step = 2)
           : _requestMic);
       case 2:
+        label = _phoneGranted ? 'Aage Badhein ›' : 'Call Permission Dein';
+        onTap = _isChecking ? null : (_phoneGranted
+          ? () => setState(() => _step = 3)
+          : _requestPhone);
+      case 3:
         label = _accGranted ? 'Aage Badhein ›' : 'Accessibility Enable Karein';
         onTap = _accGranted
-          ? () => setState(() => _step = 3)
+          ? () => setState(() => _step = 4)
           : _openAccessibility;
-      case 3:
+      case 4:
         label = 'VANI Shuru Karein 🎙️';
         onTap = _finish;
         color = VaniColors.accent;
@@ -304,7 +334,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Widget _buildStepDots() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
-      children: List.generate(4, (i) => Container(
+      children: List.generate(5, (i) => Container(
         width:  i == _step ? 20 : 6,
         height: 6,
         margin: const EdgeInsets.symmetric(horizontal: 3),
