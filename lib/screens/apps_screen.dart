@@ -86,6 +86,11 @@ class _AppsScreenState extends State<AppsScreen> {
               const _SectionLabel('COMING SOON'),
               ..._apps.where((a) => a.isComingSoon).map(_buildTile),
 
+              const SizedBox(height: 28),
+
+              // Diagnostic — for testers reporting what VANI missed.
+              _missLogLink(),
+
               const SizedBox(height: 40),
             ],
           ),
@@ -119,6 +124,34 @@ class _AppsScreenState extends State<AppsScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // Deliberately low-key: testers who want to report a miss will find it,
+  // everyone else scrolls past. The log never leaves the device on its own.
+  Widget _missLogLink() {
+    return GestureDetector(
+      onTap: () => Navigator.pushNamed(context, '/misslog'),
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.history_rounded,
+              color: VaniColors.textHint, size: 15),
+            const SizedBox(width: 7),
+            const Text(
+              'Missed commands dekhein',
+              style: TextStyle(
+                color:      VaniColors.textHint,
+                fontSize:   13,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
