@@ -120,17 +120,19 @@ class FastIntentEngine {
 
   // ── Call ────────────────────────────────────────────────────────────────────
   static VaniIntent? _call(String t) {
-    final hasCallVerb = t.contains('call ') ||
-                        t.contains('phone karo') ||
-                        t.contains('phone kar') ||
-                        t.contains(' ko call') ||
-                        t.contains('dial ');
+    // Verbs may end the utterance ("mummy ji ko phone") — a real miss from the
+    // beta log. Word-boundary matching instead of trailing-space matching, so
+    // a trailing verb still counts. \b prevents "phone" matching "telephone".
+    final hasCallVerb = RegExp(r'\b(call|dial)\b').hasMatch(t) ||
+                        RegExp(r'\bphone\s+(karo|kar\s+do|kar|lagao)\b').hasMatch(t) ||
+                        RegExp(r'\bko\s+phone\b').hasMatch(t) ||
+                        RegExp(r'\bphone\s*$').hasMatch(t);
     if (!hasCallVerb) return null;
 
     var contact = t
-        .replaceAll(RegExp(r'\b(call|phone|dial)\s*(karo|kar)?\b'), '')
+        .replaceAll(RegExp(r'\b(call|phone|dial)\s*(karo|kar\s*do|kar|lagao)?\b'), '')
         .replaceAll(RegExp(r'\bko\b'), '')
-        .replaceAll(RegExp(r'\b(abhi|please|jaldi)\b'), '')
+       .replaceAll(RegExp(r'\b(abhi|please|jaldi|lagao)\b'), '')
         .trim();
 
     contact = _clean(contact) ?? '';
