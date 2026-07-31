@@ -1,30 +1,33 @@
 package com.vani.vani
 
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
-import android.content.pm.ApplicationInfo
 
 object InstalledAppsScanner {
-
+    // Queries launchable activities rather than enumerating every installed
+    // package. QUERY_ALL_PACKAGES is a Play-restricted permission and the
+    // old getInstalledApplications() call discarded everything without a
+    // launch intent anyway — this asks for exactly the set VANI can act on.
     fun scan(context: Context): List<Map<String, Any>> {
         val pm = context.packageManager
-        val apps = pm.getInstalledApplications(PackageManager.GET_META_DATA)
 
-        return apps
-            .filter { info ->
-                (info.flags and ApplicationInfo.FLAG_SYSTEM) == 0 ||
-                (info.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
-            }
-            .filter { info ->
-                pm.getLaunchIntentForPackage(info.packageName) != null
-            }
-            .map { info ->
+        val intent = Intent(Intent.ACTION_MAIN).apply {
+            addCategory(Intent.CATEGORY_LAUNCHER)
+        }
+
+        val resolved = pm.queryIntentActivities(intent, 0)
+
+        return resolved
+            .filter { it.activityInfo.packageName != context.packageName }
+            .map { ri ->
                 mapOf(
-                    "packageName" to info.packageName,
-                    "displayName" to pm.getApplicationLabel(info).toString(),
+                    "packageName"     to ri.activityInfo.packageName,
+                    "displayName"     to ri.loadLabel(pm).toString(),
                     "hasLaunchIntent" to true
                 )
             }
+            .distinctBy { it["packageName"] as String }
             .sortedBy { it["displayName"] as String }
     }
 }

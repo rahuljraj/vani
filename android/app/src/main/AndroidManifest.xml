@@ -12,13 +12,7 @@
     
     <uses-permission android:name="android.permission.READ_CONTACTS" />    
     <uses-permission android:name="android.permission.CALL_PHONE" />
-    <uses-permission
-        android:name="android.permission.BIND_ACCESSIBILITY_SERVICE"
-        tools:ignore="ProtectedPermissions" />
-    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
-        tools:ignore="QueryAllPackagesPermission" />
-
-
+   
 
     <!-- Required on Android 11+ for canLaunchUrl() to see custom schemes -->
     <queries>
@@ -51,6 +45,10 @@
        <intent>
             <action android:name="android.intent.action.CALL" />
             <data android:scheme="tel" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
         </intent>
     </queries>
 
