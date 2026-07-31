@@ -13,6 +13,7 @@ import '../../core/constants.dart';
 import '../app_registry.dart';
 import '../app_deep_links.dart';
 import '../confirmation_service.dart';
+import 'torch_action.dart';
 
 class ActionRouter {
   final _log      = Logger();
@@ -164,6 +165,14 @@ class ActionRouter {
       }
       final ok = await AppRegistry.instance.launchApp(pkg);
       if (!ok) await _speakFail('$name nahi khul paya.');
+      return;
+    }
+
+
+    if (intent.actionCode == 'torch_toggle') {
+      final on = (intent.parameters['on'] ?? 'true') == 'true';
+      final ok = await TorchAction.setTorch(on);
+      if (!ok) await _speakFail('Torch control nahi ho paya.');
       return;
     }
 

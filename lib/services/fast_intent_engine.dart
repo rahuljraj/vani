@@ -63,7 +63,8 @@ class FastIntentEngine {
   }
 
   // Step 3: Run the match chain
-  final result = _call(t)
+  final result = _torch(t)
+      ?? _call(t)
       ?? _openApp(t)  
       ?? _navigate(t)
       ?? _nearby(t)
@@ -144,6 +145,47 @@ class FastIntentEngine {
       action: 'phone_dial',
     );
   }
+
+  
+  // ── Torch ───────────────────────────────────────────────────────────────────
+  // Hardware toggle, not an app. Must run BEFORE _openApp or "torch chalu karo"
+  // hunts for an app called "torch" and misses. No confirmation gate: the gate
+  // exists for actions that cost money or reach another person. A light is
+  // instant and reversible, and for an older user in the dark, a haan/nahi
+  // round-trip is slower than the button they were trying to avoid.
+  static VaniIntent? _torch(String t) {
+    final hasNoun = RegExp(r'\b(torch|flashlight|flash|light|batti)\b').hasMatch(t);
+    if (!hasNoun) return null;
+
+
+    // "light" is a common adjective ("light music", "light khana"). If it's
+    // followed by another word before the verb, it's modifying something —
+    // not the torch. torch/flashlight/batti are unambiguous, so this guard
+    // applies only to bare "light".
+    final lightOnly = !RegExp(r'\b(torch|flashlight|flash|batti)\b').hasMatch(t);
+    if (lightOnly && RegExp(r'\blight\s+(?!chalu|jalao|jala|on|band|bandh|bujha|bujhao|off|karo|kar)\w+').hasMatch(t)) {
+      return null;
+    }
+
+    // "light" alone is ambiguous (e.g. "light music") — require a toggle verb.
+    final onMatch  = RegExp(r'\b(chalu|jalao|jala|on|start)\b').hasMatch(t);
+    final offMatch = RegExp(r'\b(band|bandh|bujha|bujhao|off|close)\b').hasMatch(t);
+
+    if (!onMatch && !offMatch) return null;
+
+    // "band karo" wins if both appear — the user's last intent is to turn it off.
+    final turnOn = offMatch ? false : onMatch;
+
+    return _intent(
+      type:   IntentType.chat,
+      app:    AppTarget.none,
+      params: {'on': turnOn.toString()},
+      speak:  turnOn ? 'Torch chalu kar raha hoon' : 'Torch band kar raha hoon',
+      action: 'torch_toggle',
+    );
+  }
+
+
   
      static VaniIntent? _openApp(String t) {
   String? appName;
@@ -156,8 +198,18 @@ class FastIntentEngine {
 
   // Pattern 2: "X khol do" / "X kholo" / "X khol" — app BEFORE "khol"
   if (appName == null) {
-    final kholMatch = RegExp(r'^(.+?)\s+khol(?:\s+do|o)?\s*$').firstMatch(t);
+    final kholMatch = RegExp(r'^(.+?)\s+kho(?:l(?:\s+do|o)?)?\s*$').firstMatch(t);
     if (kholMatch != null) appName = kholMatch.group(1)?.trim();
+  }
+   
+   // Pattern 2b: "X chalu karo" / "X start karo" / "X chalu" — a different verb
+  // class from khol ("turn on" rather than "open"). Natural for camera, torch,
+  // music. Added from a real miss: "camera chalu karo".
+  if (appName == null) {
+    final chaluMatch = RegExp(
+      r'^(.+?)\s+(?:chalu|start)(?:\s+karo|\s+kar\s+do)?\s*$'
+    ).firstMatch(t);
+    if (chaluMatch != null) appName = chaluMatch.group(1)?.trim();
   }
 
   // Pattern 3: "X open" (no trailing verb) — app BEFORE "open"

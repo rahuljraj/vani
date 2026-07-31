@@ -8,6 +8,8 @@ import android.os.Bundle
 import android.provider.Settings
 import android.provider.ContactsContract
 import android.net.Uri
+import android.hardware.camera2.CameraManager
+import android.content.Context as AndroidContext
 
 class MainActivity : FlutterActivity() {
 
@@ -104,6 +106,30 @@ class MainActivity : FlutterActivity() {
                         result.success(false)
                     }
                 }
+
+                "setTorch" -> {
+                    val on = call.argument<Boolean>("on") ?: true
+                    try {
+                        val cm = getSystemService(AndroidContext.CAMERA_SERVICE) as CameraManager
+                        // Pick the first camera that actually has a flash unit —
+                        // on most devices that's the rear camera, but don't assume id "0".
+                        val id = cm.cameraIdList.firstOrNull { camId ->
+                            cm.getCameraCharacteristics(camId)
+                                .get(android.hardware.camera2.CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
+                        }
+                        if (id == null) {
+                            result.success(false)
+                        } else {
+                            cm.setTorchMode(id, on)
+                            result.success(true)
+                        }
+                    } catch (e: Exception) {
+                        // Camera in use by another app, or no flash.
+                        result.success(false)
+                    }
+                }
+
+
                 "placeCall" -> {
                     val number = call.argument<String>("number") ?: ""
                     if (number.isEmpty()) {
