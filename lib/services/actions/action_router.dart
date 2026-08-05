@@ -14,6 +14,7 @@ import '../app_registry.dart';
 import '../app_deep_links.dart';
 import '../confirmation_service.dart';
 import 'torch_action.dart';
+import '../contacts_service.dart';
 
 class ActionRouter {
   final _log      = Logger();
@@ -121,10 +122,34 @@ class ActionRouter {
       // ends in a dial or a spoken cancel.
       final heard1 =
           await svc.objectionWindow('$contact ko call kar raha hoon.');
-      if (!svc.containsNo(heard1)) {
+     if (!svc.containsNo(heard1)) {
+        // Speech that is neither yes nor no may be a bare correction —
+        // "Mukesh Singh Rajpurohit ko" — which is how people actually correct
+        // each other under time pressure. Accept it ONLY when the phrase
+        // resolves to a real contact: random speech near the phone almost
+        // never matches the address book, so this stays safe. Anything that
+        // doesn't resolve proceeds with the original, never a wrong dial.
         if (heard1.trim().isNotEmpty && !svc.containsYes(heard1)) {
-          _log.i(
-              '🎯 Objection window heard unclassifiable: "$heard1" → proceeding');
+          final bare = _sanitizeContact(_stripTrailingConnectors(heard1));
+          if (bare.isNotEmpty && bare.toLowerCase() != contact.toLowerCase()) {
+            final resolved = await ContactsService.instance.resolveNumber(bare);
+            if (resolved != null && resolved.isNotEmpty) {
+              print('🎯 Bare correction accepted: "$bare"');
+              // A bare correction is a weaker signal than an explicit "nahi",
+              // so it gets the same objection window rather than less. This is
+              // the second and final announcement — never a third.
+              final heard2 =
+                  await svc.objectionWindow('$bare ko call kar raha hoon.');
+              if (svc.containsNo(heard2)) {
+                await _say('Theek hai, call cancel kar diya.');
+                return;
+              }
+              final okr = await _call.dial(bare);
+              if (!okr) await _speakFail('Phone app nahi khul paya.');
+              return;
+            }
+          }
+          print('🎯 Objection window unclassifiable: "$heard1" → proceeding');
         }
         final ok = await _call.dial(contact);
         if (!ok) await _speakFail('Phone app nahi khul paya.');
@@ -133,12 +158,28 @@ class ActionRouter {
 
       // Objection. "nahi <name> ko" is a redirect; a bare no cancels.
      // Objection. "nahi <name> ko" is a redirect; a bare no cancels.
-      final newContact = _sanitizeContact(
+     // Objection. "nahi <name> ko" is a redirect; a bare no cancels.
+      var newContact = _sanitizeContact(
           _stripTrailingConnectors(svc.redirectTarget(heard1)));
+
+      // Bare correction without a no-word — "Mukesh Singh Rajpurohit ko" —
+      // is how people actually correct each other under time pressure.
+      // Accept it ONLY when the whole phrase resolves to a real contact:
+      // random speech near the phone almost never matches the address book,
+      // so this stays safe while the natural form works. Anything that
+      // doesn't resolve falls through to cancel, never to a wrong dial.
       if (newContact.isEmpty) {
-        await _say('Theek hai, call cancel kar diya.');
-        return;
+        final bare = _sanitizeContact(_stripTrailingConnectors(heard1));
+        if (bare.isNotEmpty && bare.toLowerCase() != contact.toLowerCase()) {
+          final resolved = await ContactsService.instance.resolveNumber(bare);
+          if (resolved != null && resolved.isNotEmpty) {
+            print('🎯 Bare correction accepted: "$bare"');
+            newContact = bare;
+          }
+        }
       }
+
+      
 
       // Second (and last) announcement for the redirected name.
       onStatus?.call('$newContact ko call kar raha hoon.');
