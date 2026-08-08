@@ -72,7 +72,12 @@ class GemmaService {
       app: AppTarget.none,
       parameters: {},
       speakText: heard.isNotEmpty
-          ? 'Maine suna: "$heard" — dobara bolein?'
+          // STT worked; VANI just can't do this yet. Asking the user to repeat
+          // sends them round a loop that can never succeed — they say it three
+          // times, get the same reply, and conclude VANI is broken. Say what
+          // is actually true instead. The utterance is in MissLog either way.
+          ? 'Maine suna: "$heard" — ye main abhi nahi kar sakti.'
+          // Nothing was transcribed — here repeating genuinely might work.
           : 'Kuch sunayi nahi diya, dobara bolein?',
       actionCode: 'none',
     );
