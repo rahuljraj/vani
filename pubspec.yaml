@@ -38,6 +38,9 @@ dependencies:
   cupertino_icons: ^1.0.8
   string_similarity: ^2.0.0
 
+  # ── Networking ──────────────────────────────────
+  http: ^1.2.0
+
 dependency_overrides:
   # record_linux 0.7.2 is incompatible with record_platform_interface 1.5.0;
   # force the updated implementation that matches the interface.
