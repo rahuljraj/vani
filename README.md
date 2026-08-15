@@ -1,40 +1,83 @@
 # VANI — Voice AI Native Interface for India
 
 > Your phone, your voice, in your language.
-> Hinglish-native. Understanding runs on your device.
+> Hinglish-native. Built for the phones most Indians actually carry.
 
 ---
 
 ## What is VANI
 
-VANI is a Hinglish-native voice assistant for Android that controls your
-everyday apps by voice — open apps, call and message contacts, navigate, and
-search groceries and food. It's built for the mid-range phones most Indians
-actually carry, not just flagships.
+VANI is a Hinglish-native voice assistant for Android. It holds the system
+assistant slot — long-press the power button and VANI opens — and completes
+everyday tasks by voice: calls, WhatsApp messages, navigation, launching apps,
+in-app search, and the torch.
 
-- *"mummy ko call karo"* → finds the contact, pulls up the dialer
-- *"Blinkit pe doodh dhundho"* → opens Blinkit with the search ready
+- *"mummy ji ko phone lagao"* → resolves the contact, places the call
+- *"WhatsApp kholo"* → opens the app
+- *"Blinkit pe doodh dhundho"* → opens Blinkit and runs the search
 - *"Surat railway station navigate karo"* → opens Maps with directions
+- *"torch chalu karo"* → turns on the flashlight
+
+Built for mid-range and budget Android phones, not flagships. Around 500
+million Indians own a smartphone; only about 50 million transact on food,
+grocery and mobility apps. The interface is the barrier, not the appetite —
+English-only menus and tap-heavy flows lock out older users, first-time
+smartphone owners, and anyone more comfortable speaking than reading.
+
+---
+
+## Status
+
+**v1.1.1-beta** — released and release-signed. In daily use by a small group
+of testers. No public distribution yet: Google Play Protect blocks sideloaded
+apps requesting sensitive permissions, so distribution moves to a Play Store
+closed testing track.
+
+---
+
+## Supported commands
+
+| Command | What it does | Status |
+| --- | --- | --- |
+| Call contact | Resolves contact by name, places the call | ✅ Working |
+| WhatsApp | Resolves contact, opens chat with message pre-drafted | ✅ Working — drafts only, never auto-sends |
+| Navigate | Opens Google Maps with directions | ✅ Working |
+| Open app | Launches any installed app by name, fuzzy-matched | ✅ Working |
+| In-app search | Opens an app and runs a search inside it | ✅ Working |
+| Food / grocery | Opens Swiggy or Blinkit and runs a search | ✅ Working — **search only, does not place orders** |
+| Torch | Turns the flashlight on and off | ✅ Working |
+
+Every action that reaches another person or spends money passes a spoken
+confirmation gate before it runs. The torch is the deliberate exception: it is
+instant, reversible, and a confirmation round-trip would defeat the point for
+the user it most helps.
 
 ---
 
 ## How it works — a two-tier intent engine
 
-The core bet: most voice commands are patterns, not reasoning — so they
-shouldn't pay the cost of a large model.
+The core bet: most voice commands are patterns, not reasoning, so they
+shouldn't pay the cost of a model.
 
-- **FastIntentEngine** — an on-device rule/pattern matcher resolves ~90% of
-  commands in under 50ms, with no model involved ("WhatsApp kholo",
-  "papa ko call karo").
-- **Gemma 3 1B (on-device)** — the local LLM wakes only for the ambiguous
-  ~10%, via `flutter_gemma` (LiteRT, ~530MB).
+- **FastIntentEngine** — an on-device rule and pattern matcher resolves roughly
+  90% of commands in under 50ms with no model involved and no network call.
+- **Cloud conversational layer** — handles the ambiguous remainder. VANI is
+  usable without it: if it is unavailable, the fast path still works.
 
-This keeps VANI fast and light enough for a 6GB-RAM mid-range phone, and means
-the mic works the instant it opens — most commands never wait for the model.
+The assistant slot launches in ~670ms on a OnePlus Nord CE 2 Lite, measured on
+device.
 
 A category-aware disambiguator handles the tricky cases: in *"doodh order
-karo"* the item word "doodh" (milk) outweighs the generic verb "order", so it
-routes to groceries, not food delivery.
+karo"* the item word *doodh* (milk) outweighs the generic verb *order*, so it
+routes to groceries rather than food delivery. Where two contacts match
+equally well, VANI asks instead of guessing.
+
+### Hinglish, specifically
+
+Real code-switched speech is the hard part — not Hindi, and not English.
+Custom phonetic folding lets a transcript like "Shizuka" reach a contact saved
+as "Sizu". An on-device log of unmatched commands feeds rule fixes from actual
+usage rather than guesswork; several supported phrasings came directly from it.
 
 ---
 
@@ -43,44 +86,38 @@ routes to groceries, not food delivery.
 | Layer | Technology |
 | --- | --- |
 | UI | Flutter (Android) |
+| Native bridge | Kotlin — VoiceInteractionService, telephony, contacts, CameraManager |
 | Fast path | FastIntentEngine (on-device rule matcher) |
-| On-device LLM | Gemma 3 1B via flutter_gemma (LiteRT) |
-| Speech-to-text | Online en_IN (v1.0); offline Vosk on roadmap |
+| Conversational layer | Cloud LLM API |
+| Speech-to-text | Google STT (en-IN) with custom phonetic folding |
 | Speech output | Android native TTS (hi-IN / en-IN) |
-| App control | Deep links / Android Intents + Accessibility Service |
+| App control | Deep links and Android Intents |
 | State | Riverpod |
+| Local storage | SharedPreferences (on-device only, backup disabled) |
+
+Minimum SDK 26. Targets Android 16 (API 36).
 
 ---
 
 ## Privacy
 
-VANI is privacy-first, and honest about where that line sits today:
+VANI is privacy-conscious by architecture, and honest about where the line
+sits:
 
-- **Intent understanding runs on the device** — the rule engine and Gemma 3 1B
-  are local. No cloud LLM.
-- **App actions are local** — deep links, intents, and the Accessibility
-  Service act on apps you're already signed into.
-- **Speech-to-text in v1.0 uses an online service** (`en_IN`). This is the one
-  part that leaves the device, and it's disclosed in-app:
-  *"Runs on your device, except speech-to-text."*
-- **Offline STT (Vosk) is on the roadmap**, so the full pipeline can run in
-  airplane mode.
-- No account required. No analytics or tracking servers. No cloud API calls
-  for understanding.
+- **Intent understanding and personal data stay on the device.** Contact
+  resolution, phonetic matching and command routing are all local.
+- **Speech-to-text goes to Google (en-IN).** This is disclosed during
+  onboarding. It is the one part of the pipeline that leaves the phone.
+- **The conversational layer is a cloud API call**, used only for commands the
+  on-device engine cannot route.
+- **Android Auto Backup is disabled**, so local app data is never synced to
+  Google Drive.
+- **App actions are local** — deep links and intents act on apps you are
+  already signed into.
+- No account required. No analytics, no tracking servers.
 
----
-
-## Supported commands (v1.0)
-
-| Command | What it does | Status |
-| --- | --- | --- |
-| Open app | Launch any installed app by name (fuzzy-matched) | ✅ Working |
-| Call contact | Resolve contact by name → pre-fill dialer | ✅ Working (auto-call in v1.1) |
-| WhatsApp | Resolve contact → open chat, message pre-drafted | ✅ Working (drafts; never auto-sends) |
-| Navigate | Open Google Maps with directions | ✅ Working |
-| Order food | Swiggy in-app search via verified app-link | ✅ Working |
-| Grocery | Blinkit in-app search via verified app-link | ✅ Working |
-| Zomato | — | 🔜 v1.1 (deep link being verified) |
+We do not claim VANI is fully offline, and never will while STT and the
+conversational layer are network calls.
 
 ---
 
@@ -88,61 +125,53 @@ VANI is privacy-first, and honest about where that line sits today:
 
 ```
 "WhatsApp kholo"
-"mummy ko call karo"
+"mummy ji ko phone lagao"
 "raju bhai sa ko whatsapp karo, late ho jaunga"
 "Surat railway station navigate karo"
 "Blinkit pe doodh dhundho"
-"biryani mangwa do"
+"camera chalu karo"
+"torch band karo"
 ```
-
----
-
-## Project structure
-
-```
-lib/
-├── core/                     ← constants, inference config
-├── models/                   ← intent + app models
-├── services/
-│   ├── fast_intent_engine.dart   ← ~90% of commands, <50ms
-│   ├── gemma_service.dart        ← Gemma 3 1B fallback
-│   ├── intent_disambiguator.dart ← category-aware scoring
-│   ├── audio_service.dart        ← STT
-│   ├── tts_service.dart          ← voice output
-│   └── actions/                  ← per-app routers (Maps, Blinkit, Swiggy, WhatsApp)
-└── screens/                  ← splash, onboarding, home, apps
-android/app/src/main/kotlin/com/vani/vani/
-├── MainActivity.kt               ← Flutter ⇄ native bridge
-├── VaniTileService.kt            ← Quick Settings tile (tap → listen)
-└── VaniAccessibilityService.kt   ← app-control fallback
-```
-
----
-
-## Setup (dev)
-
-**Prerequisites:** Flutter SDK 3.19+, Android Studio (SDK + NDK), a physical
-Android device with 6GB+ RAM and USB debugging on.
-
-```
-flutter pub get
-# Place the Gemma 3 1B LiteRT model on the device at /sdcard/Download/
-# (see flutter_gemma docs for the model file), then:
-flutter run
-```
-
-On first launch, grant microphone and accessibility permissions in onboarding.
 
 ---
 
 ## Roadmap
 
-| Phase | Focus |
-| --- | --- |
-| v1.0 | 5 core commands hardened · onboarding · signed APK · closed beta (10–20 users in Surat) |
-| v1.1 | Offline STT (Vosk, airplane-mode) · Zomato · auto-call · share-target ("ye raju ko bhejo") |
-| Later | Wake word · lower-RAM optimization · more vernacular languages |
+- Play Store closed testing track — the current distribution blocker
+- Voice-completed ordering through partners' official APIs
+- More Indian languages beyond Hinglish
+- On-device wake word
+
+### Deliberately not pursued
+
+- **Offline STT.** Vosk and Whisper-class models were tested and failed on
+  code-switched Hinglish: English brand names inside Hindi sentences come back
+  mangled ("WhatsApp" → "vahaatsaepp"). Revisit when a recogniser handles
+  code-switching natively.
+- **Accessibility-driven UI tapping** for ordering. Brittle against app
+  layout changes; official partner APIs are the right path.
 
 ---
 
-*Built for India. On-device first.*
+## Building
+
+```bash
+flutter pub get
+flutter build apk --release
+```
+
+Release builds require a keystore configured in `android/key.properties`
+(gitignored).
+
+---
+
+## About
+
+Built by [Rahul Rajpurohit](https://github.com/rahuljraj) — solo, at night,
+around running a family retail shop in Surat.
+
+**Trikontech (OPC) Private Limited** · DPIIT recognised (DIPP239528) ·
+[trikontech.in](https://trikontech.in)
+
+Built with Claude Code. Every architecture and product decision is mine, and
+everything ships only after device verification.
