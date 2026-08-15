@@ -15,10 +15,9 @@ class OnboardingScreen extends StatefulWidget {
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
 
-  int  _step          = 0; // 0=welcome 1=mic 2=phone 3=accessibility 4=ready
+  int  _step          = 0; // 0=welcome 1=mic 2=phone 3=ready
   bool _micGranted    = false;
   bool _phoneGranted  = false;
-  bool _accGranted    = false;
   bool _isChecking    = false;
 
   @override
@@ -30,9 +29,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Future<void> _checkExistingPermissions() async {
     final perms = await PermissionService.instance.checkAllPermissions();
     setState(() {
-      _micGranted   = perms['microphone']    ?? false;
-      _phoneGranted = perms['phone']         ?? false;
-      _accGranted   = perms['accessibility'] ?? false;
+      _micGranted   = perms['microphone'] ?? false;
+      _phoneGranted = perms['phone']      ?? false;
     });
   }
 
@@ -58,18 +56,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       _isChecking   = false;
       _step         = 3;
     });
-  }
-
-  Future<void> _openAccessibility() async {
-    await PermissionService.instance.openAccessibilitySettings();
-    for (int i = 0; i < 30; i++) {
-      await Future.delayed(const Duration(seconds: 1));
-      final ok = await PermissionService.instance.hasAccessibility;
-      if (ok) {
-        setState(() { _accGranted = true; _step = 4; });
-        return;
-      }
-    }
   }
 
   Future<void> _finish() async {
@@ -109,8 +95,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Widget _buildStep() {
     switch (_step) {
       case 0:
-        // Honest privacy line — matches the README: understanding is
-        // on-device; speech-to-text is the one online piece in v1.0.
+        // Honest privacy line: understanding and personal data stay on the
+        // device; speech-to-text is the one part that leaves it.
         return _stepContent(
           emoji:    '🎙️',
           title:    'Namaste!\nMain hoon VANI',
@@ -139,17 +125,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           granted:  _phoneGranted,
         );
       case 3:
-        // Prominent disclosure (Play accessibility policy): say exactly what
-        // the service does and does not do, before sending to settings.
-        return _stepContent(
-          emoji:    '♿',
-          title:    'Accessibility Access',
-          subtitle: 'VANI accessibility ka istemaal sirf\naapke bole hue commands se apps\nkholne aur chalane ke liye karta hai.',
-          detail:   'VANI aapki screen ka content kabhi\nstore ya share nahi karta.\n'
-                    'Settings mein VANI Assistant "On" karein.',
-          granted:  _accGranted,
-        );
-      case 4:
         // First-use prompt: hand the user a command that works on try #1.
         return Column(
           mainAxisSize: MainAxisSize.min,
@@ -292,11 +267,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ? () => setState(() => _step = 3)
           : _requestPhone);
       case 3:
-        label = _accGranted ? 'Aage Badhein ›' : 'Accessibility Enable Karein';
-        onTap = _accGranted
-          ? () => setState(() => _step = 4)
-          : _openAccessibility;
-      case 4:
         label = 'VANI Shuru Karein 🎙️';
         onTap = _finish;
         color = VaniColors.accent;
@@ -334,7 +304,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Widget _buildStepDots() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
-      children: List.generate(5, (i) => Container(
+      children: List.generate(4, (i) => Container(
         width:  i == _step ? 20 : 6,
         height: 6,
         margin: const EdgeInsets.symmetric(horizontal: 3),

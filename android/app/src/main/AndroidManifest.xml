@@ -77,19 +77,7 @@
             </intent-filter>
         </activity>
 
-        <!-- ── VANI Accessibility Service ───────── -->
-        <service
-            android:name=".VaniAccessibilityService"
-            android:exported="true"
-            android:label="VANI Assistant"
-            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
-            <intent-filter>
-                <action android:name="android.accessibilityservice.AccessibilityService" />
-            </intent-filter>
-            <meta-data
-                android:name="android.accessibilityservice"
-                android:resource="@xml/accessibility_service_config" />
-        </service>
+    
 
         <!-- ── Quick Settings Tile (quick-launch, no extra perms) ── -->
         <service

@@ -36,26 +36,6 @@ class PermissionService {
   Future<bool> get hasPhone async =>
     await Permission.phone.isGranted;
 
-  // ── Accessibility Service ──────────────────────
-  Future<bool> get hasAccessibility async {
-    try {
-      final result = await _channel.invokeMethod<bool>(
-        'isAccessibilityEnabled'
-      );
-      return result ?? false;
-    } catch (e) {
-      _log.e('Accessibility check error: $e');
-      return false;
-    }
-  }
-
-  Future<void> openAccessibilitySettings() async {
-    try {
-      await _channel.invokeMethod('openAccessibilitySettings');
-    } catch (e) {
-      _log.e('Open accessibility settings error: $e');
-    }
-  }
 
 
   // ── Assistant slot ─────────────────────────────
@@ -82,17 +62,7 @@ class PermissionService {
     }
   }
 
-  // ── Set Pending Action ─────────────────────────
-  Future<void> setPendingAction(String action, String data) async {
-    try {
-      await _channel.invokeMethod('setPendingAction', {
-        'action': action,
-        'data':   data,
-      });
-    } catch (e) {
-      _log.e('Set pending action error: $e');
-    }
-  }
+  
 
   // ── Quick Settings tile auto-listen flag ──────
   // Native sets this when VANI is opened via the QS tile.
@@ -112,15 +82,13 @@ class PermissionService {
     return {
       'microphone':    await hasMicrophone,
       'phone':         await hasPhone,
-      'accessibility': await hasAccessibility,
-    };
+          };
   }
 
   // ── Request All Required Permissions ──────────
   Future<bool> requestAll() async {
     final mic = await requestMicrophone();
     if (!mic) return false;
-    // Accessibility is opened in settings — can't request programmatically
     return true;
   }
 }

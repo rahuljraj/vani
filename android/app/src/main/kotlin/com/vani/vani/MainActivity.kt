@@ -48,13 +48,6 @@ class MainActivity : FlutterActivity() {
             CHANNEL
         ).setMethodCallHandler { call, result ->
             when (call.method) {
-                "isAccessibilityEnabled" -> {
-                    result.success(isAccessibilityServiceEnabled())
-                }
-                "openAccessibilitySettings" -> {
-                    startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-                    result.success(true)
-                }
                 "openAssistantSettings" -> {
                     try {
                         startActivity(Intent("android.settings.VOICE_INPUT_SETTINGS"))
@@ -63,13 +56,7 @@ class MainActivity : FlutterActivity() {
                         result.success(false)
                     }
                 }
-                "setPendingAction" -> {
-                    val action = call.argument<String>("action")
-                    val data = call.argument<String>("data")
-                    VaniAccessibilityService.pendingAction = action
-                    VaniAccessibilityService.pendingData = data
-                    result.success(true)
-                }
+                
                 "consumeAutoListen" -> {
                     val pending = autoListenPending
                     autoListenPending = false
@@ -190,16 +177,7 @@ class MainActivity : FlutterActivity() {
         return contacts
     }
 
-    private fun isAccessibilityServiceEnabled(): Boolean {
-        val expectedService = "${packageName}/" +
-            "${VaniAccessibilityService::class.java.canonicalName}"
-        val enabledServices = Settings.Secure.getString(
-            contentResolver,
-            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-        ) ?: return false
-        return enabledServices.split(":")
-            .any { it.equals(expectedService, ignoreCase = true) }
-    }
+    
 
     private fun isPackageInstalled(packageName: String): Boolean {
         return try {

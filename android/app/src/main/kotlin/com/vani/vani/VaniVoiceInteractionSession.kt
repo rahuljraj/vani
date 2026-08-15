@@ -24,7 +24,6 @@ class VaniVoiceInteractionSession(context: Context) :
         content: android.app.assist.AssistContent?
     ) {
         // VANI never reads the assisted app's screen content here.
-        // Screen access happens only through the accessibility service,
         // with its own explicit user consent.
     }
 
