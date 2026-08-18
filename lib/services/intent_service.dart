@@ -1,22 +1,33 @@
-// lib/services/gemma_service.dart
+// lib/services/intent_service.dart
 //
-// STUB — flutter_gemma is stripped from the beta build (gemmaEnabled=false)
-// to keep the cold-install APK lean. This keeps the full GemmaService public
-// surface so call sites (home_screen.dart) compile unchanged. Model methods
-// are no-ops that log a warning and return false; nothing throws.
-// Re-enabling Gemma in v1.1 = restore the flutter_gemma dependency and the
-// real implementation from git history — but see the note on process().
+// LIVE INTENT ROUTER. Was gemma_service.dart until Aug 2026 — renamed because
+// the old name hid what this file actually does.
+//
+// process() IS THE SHIPPED COMMAND PATH. Every utterance from home_screen
+// enters here and is resolved by FastIntentEngine.tryMatch(). It also writes
+// unmatched utterances to MissLog, which is where the real verb-gap data
+// comes from. No model is involved anywhere in the beta build.
+//
+// ⚠️ The model methods below (isModelDownloaded / downloadModel / initialize /
+// streamResponse) are no-op stubs, kept ONLY so home_screen.dart compiles
+// unchanged while InferenceConfig.gemmaEnabled == false.
+//
+// ⚠️ RE-ENABLING AN LLM FALLBACK LATER MEANS ADDING A BRANCH INSIDE process(),
+// AFTER the FastIntentEngine call and BEFORE the MissLog write. It does NOT
+// mean restoring the old gemma_service.dart from git history. That file has no
+// FastIntentEngine call and no MissLog write, and would delete both with no
+// compile error.
 
 import 'package:logger/logger.dart';
 import '../models/vani_intent.dart';
 import 'fast_intent_engine.dart';
 import 'miss_log.dart';
 
-class GemmaService {
-  static GemmaService? _instance;
-  static GemmaService get instance =>
-      _instance ??= GemmaService._();
-  GemmaService._();
+class IntentService {
+  static IntentService? _instance;
+  static IntentService get instance =>
+      _instance ??= IntentService._();
+  IntentService._();
 
   final _log = Logger();
 
@@ -24,21 +35,21 @@ class GemmaService {
   bool get isLoading => false;
 
   Future<bool> isModelDownloaded() async {
-    _log.w('GemmaService stub: no model in beta build');
+    _log.w('IntentService stub: no model in beta build');
     return false;
   }
 
   Future<bool> downloadModel({
     void Function(double progress)? onProgress,
   }) async {
-    _log.w('GemmaService stub: downloadModel() is a no-op in beta build');
+    _log.w('IntentService stub: downloadModel() is a no-op in beta build');
     return false;
   }
 
   Future<bool> initialize({
     void Function(double)? onProgress,
   }) async {
-    _log.w('GemmaService stub: initialize() is a no-op in beta build');
+    _log.w('IntentService stub: initialize() is a no-op in beta build');
     return false;
   }
 
@@ -84,7 +95,7 @@ class GemmaService {
   }
 
   Stream<String> streamResponse(String userText) async* {
-    _log.w('GemmaService stub: streamResponse() has no model in beta build');
+    _log.w('IntentService stub: streamResponse() has no model in beta build');
     yield 'AI ready nahi hai abhi.';
   }
 

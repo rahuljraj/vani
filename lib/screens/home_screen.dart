@@ -5,7 +5,7 @@ import '../core/constants.dart';
 import '../core/inference_config.dart';
 import '../services/audio_service.dart';
 import '../services/tts_service.dart';
-import '../services/gemma_service.dart';
+import '../services/intent_service.dart';
 import '../services/permission_service.dart';
 import '../services/actions/action_router.dart';
 import '../models/vani_intent.dart';
@@ -124,12 +124,12 @@ class _HomeScreenState extends State<HomeScreen>
     });
 
     // Check sdcard or docs directory for model
-    final modelAvailable = await GemmaService.instance.isModelDownloaded();
+    final modelAvailable = await IntentService.instance.isModelDownloaded();
     if (!modelAvailable) {
       // Model not on device yet — try network download
       if (mounted) setState(() { _isDownloading = true; _loadingStep = 'Model download ho rahi hai...'; });
 
-      final ok = await GemmaService.instance.downloadModel(
+      final ok = await IntentService.instance.downloadModel(
         onProgress: (p) {
           if (mounted) setState(() => _downloadProgress = p);
         },
@@ -152,7 +152,7 @@ class _HomeScreenState extends State<HomeScreen>
       _downloadProgress = 0.0;
     });
 
-    final ok = await GemmaService.instance.initialize(
+    final ok = await IntentService.instance.initialize(
       onProgress: (p) {
         if (mounted) setState(() => _downloadProgress = p);
       },
@@ -181,17 +181,17 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Future<void> _retryModel() async {
-    await GemmaService.instance.dispose();
+    await IntentService.instance.dispose();
     await _initModel();
   }
 
   // ── Recording ───────────────────────────────────
   Future<void> _startListening() async {
   if (_state == VaniState.thinking) return;
-  // Intentionally NOT gated on _modelReady: STT (online) + FastIntentEngine
-  // handle ~90% of commands with no model. If a command falls through to
-  // Gemma before it's loaded, GemmaService.process() returns a graceful
-  // "AI load ho rahi hai" reply — no crash, no hang.
+    // Intentionally NOT gated on _modelReady: STT (online) + FastIntentEngine
+  // handle ~90% of commands with no model. An unmatched command returns a
+  // spoken "ye main abhi nahi kar sakti" from IntentService.process() and is
+  // written to MissLog — no crash, no hang, no dead end for the user.
   await TtsService.instance.stop();
 
   final ok = await AudioService.instance.startSttListening(
@@ -247,7 +247,7 @@ class _HomeScreenState extends State<HomeScreen>
     // before any intent that resolves an app name.
     await AppRegistry.instance.ensureLoaded();
 
-    final intent = await GemmaService.instance.process(text);
+    final intent = await IntentService.instance.process(text);
 
     if (!mounted) return;
 
