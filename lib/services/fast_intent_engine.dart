@@ -114,7 +114,7 @@ class FastIntentEngine {
     return _disambiguate(t, candidates);
   }
 
-  print('🔍 No FastIntent match for: "$t" — falling through to Gemma');
+   print('🔍 No FastIntent match for: "$t" — logging miss');
   return null;
 }
 
